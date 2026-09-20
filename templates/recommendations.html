@@ -9,25 +9,25 @@
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
 
-    <title>Recomendaciones para {{ id_oyente }}</title>
+    <title>Recommendations for {{ user_id }}</title>
 </head>
 
 <body class="px-6 py-4">
     <div class="flex justify-between">
-        <h1 class="mb-4 text-lg font-bold">Recomendaciones para {{ id_oyente }}</h1>
+        <h1 class="mb-4 text-lg font-bold">Recommendations for {{ user_id }}</h1>
         <div>
-            <small>{{ cant_vistos }} vistos, {{ cant_valorados }} valorados - <a href="/reset/{{ id_oyente }}"
+            <small>{{ seen_count }} seen, {{ rated_count }} rated - <a href="/reset/{{ user_id }}"
                     class="bg-teal-400 text-white font-semibold text-xs px-2 py-1 mt-2 rounded cursor-pointer">reset</a>
             </small>
         </div>
     </div>
 
-    <form method="post" action="/recomendar/{{ id_oyente }}">
+    <form method="post" action="/recommend/{{ user_id }}">
         <div class="grid grid-cols-3 gap-4">
-            {% for disco in discos_recomendados %}
+            {% for album in recommended_albums %}
             <div class="card card-side bg-base-100 shadow-sm border bg-base-100">
-                {% if disco.img_src %}
-                <img src="{{ disco.img_src }}" class="w-full max-w-40 object-cover" />
+                {% if album.cover_url %}
+                <img src="{{ album.cover_url }}" class="w-full max-w-40 object-cover" />
                 {% else %}
                 <div class="w-full max-w-40 flex items-center justify-center bg-neutral-700 text-neutral-300 text-4xl">
                     ♪
@@ -36,20 +36,20 @@
 
                 <div class="card-body">
                     <h2 class="card-title font-semibold link">
-                        <a href="/recomendaciones/{{ disco.id_disco }}">{{ disco.titulo }}</a>
+                        <a href="/albums/{{ album.album_id }}">{{ album.title }}</a>
                     </h2>
                     <span class="text-sm">
-                        {{ disco.artista }} - {{ disco.genero }}{% if disco.anio_edicion %} - {{ disco.anio_edicion }}{% endif %}
+                        {{ album.artists }} - {{ album.genres }}{% if album.release_date %} - {{ album.release_date }}{% endif %}
                     </span>
-                    {% if disco.resumen %}
-                    <span class="text-xs">{{ disco.resumen|truncate(400) }}</span>
+                    {% if album.descriptors %}
+                    <span class="text-xs">{{ album.descriptors|truncate(400) }}</span>
                     {% endif %}
 
                     <div class="card-actions justify-end items-center mt-auto">
 
                         <div class="flex">
-                            <label for="{{disco.id_disco}}" class="flex-none mr-2">Mi puntuación:</label>
-                            <select name="{{disco.id_disco}}" class="px-4 py-1 text-sm border rounded ">
+                            <label for="{{album.album_id}}" class="flex-none mr-2">My rating:</label>
+                            <select name="{{album.album_id}}" class="px-4 py-1 text-sm border rounded ">
                                 <option value="0" selected></option>
                                 <option value="1">1</option>
                                 <option value="2">2</option>
@@ -71,7 +71,7 @@
 
         <div class="flex justify-end">
             <input type="submit" class="bg-teal-400 text-white font-semibold px-4 py-1 mt-2 rounded cursor-pointer"
-                value="Más recomendaciones">
+                value="More recommendations">
         </div>
     </form>
 </body>

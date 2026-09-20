@@ -5,20 +5,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://cdn.tailwindcss.com"></script>
-    <title>Ingreso</title>
+    <title>Login</title>
 </head>
 <body class="px-12 py-4">
     <form method="post" action="/" class="w-96 border shadow-xl mx-auto mt-7 p-4">
-        <h2 class="mb-4 text-xl font-bold">Entrar al Sistema</h2>
+        <h2 class="mb-4 text-xl font-bold">Log In</h2>
         <div class="flex mb-4">
             <label>
-                Usuario:
-                <input type="text" name="id_oyente" minlength="3" maxlength="30" required class="p-1 border rounded">
+                User:
+                <input type="text" name="user_id" minlength="3" maxlength="30" required class="p-1 border rounded">
             </label>
         </div>
         <div class="flex justify-end">
             <button type="submit" class="border bg-teal-500 hover:bg-teal-700 text-white text-lg py-2 px-4 ml-auto">
-                Ingresar
+                Log In
             </button>
         </div>
     </form>

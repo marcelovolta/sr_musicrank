@@ -1,117 +1,124 @@
-# Todas las queries SQL usadas por recomendador.py, centralizadas acá para
-# que sea más fácil agregar/editar consultas más complejas a futuro.
+# All SQL queries used by recommender.py, centralized here so it's easier
+# to add/edit more complex queries going forward.
 
-CREATE_TABLA_INTERACCIONES = """
-    CREATE TABLE IF NOT EXISTS interacciones (
-        id_oyente TEXT,
-        id_disco INTEGER,
-        fecha TEXT,
+# --- one-time schema migration: drop the old Spanish-named objects from
+# earlier versions of this app, so a stale local db.mergenres.db gets
+# cleaned up automatically instead of ending up with duplicate tables. ---
+DROP_LEGACY_TABLE_INTERACCIONES = "DROP TABLE IF EXISTS interacciones"
+DROP_LEGACY_TABLE_VISTAS = "DROP TABLE IF EXISTS vistas"
+DROP_LEGACY_VIEW_DISCOS = "DROP VIEW IF EXISTS discos"
+
+CREATE_TABLE_RATINGS = """
+    CREATE TABLE IF NOT EXISTS ratings (
+        user_id TEXT,
+        album_id INTEGER,
+        created_at TEXT,
         rating INT,
-        PRIMARY KEY (id_oyente, id_disco)
+        PRIMARY KEY (user_id, album_id)
     )
 """
 
-CREATE_TABLA_VISTAS = """
-    CREATE TABLE IF NOT EXISTS vistas (
-        id_oyente TEXT,
-        id_disco INTEGER,
-        fecha datetime,
-        PRIMARY KEY (id_oyente, id_disco)
+CREATE_TABLE_SEEN = """
+    CREATE TABLE IF NOT EXISTS seen (
+        user_id TEXT,
+        album_id INTEGER,
+        created_at datetime,
+        PRIMARY KEY (user_id, album_id)
     )
 """
 
-# Vista que arma la "ficha" de cada disco combinando artista(s), género(s)
-# principal(es) y una imagen de portada de reemplazo cuando no hay una.
-CREATE_VISTA_DISCOS = """
-    CREATE VIEW IF NOT EXISTS discos AS
+# View that builds the "card" for each album, combining artist(s), primary
+# genre(s), and a cover image fallback when there isn't one.
+CREATE_VIEW_ALBUM_CATALOG = """
+    CREATE VIEW IF NOT EXISTS album_catalog AS
     SELECT
-        al.id AS id_disco,
-        al.title AS titulo,
+        al.id AS album_id,
+        al.title AS title,
         (
             SELECT GROUP_CONCAT(ar.name, ', ')
             FROM album_artists AS aa
             JOIN artists AS ar ON ar.id = aa.artist_id
             WHERE aa.album_id = al.id
-        ) AS artista,
+        ) AS artists,
         (
             SELECT GROUP_CONCAT(g.name, ', ')
             FROM album_genres AS ag
             JOIN genres AS g ON g.id = ag.genre_id
             WHERE ag.album_id = al.id AND ag.kind = 'primary'
-        ) AS genero,
-        al.release_date AS anio_edicion,
-        am.descriptors AS resumen,
-        al.cover_url AS img_src
+        ) AS genres,
+        al.release_date AS release_date,
+        am.descriptors AS descriptors,
+        al.cover_url AS cover_url
     FROM albums AS al
     LEFT JOIN album_metadata AS am ON am.album_id = al.id
 """
 
-ITEM_VALORADOS = """
-    SELECT COUNT(*) AS item_valorados
-    FROM interacciones
-    WHERE id_oyente = ? AND rating > 0
+COUNT_RATED = """
+    SELECT COUNT(*) AS rated_count
+    FROM ratings
+    WHERE user_id = ? AND rating > 0
 """
 
-ITEMS_VISTOS = """
-    SELECT COUNT(*) AS items_vistos
-    FROM vistas
-    WHERE id_oyente = ?
+COUNT_SEEN = """
+    SELECT COUNT(*) AS seen_count
+    FROM seen
+    WHERE user_id = ?
 """
 
-ITEMS_DESCONOCIDOS = """
+UNKNOWN_ALBUMS = """
     SELECT *
-    FROM discos
-    WHERE id_disco NOT IN (SELECT id_disco FROM interacciones WHERE id_oyente = ?)
-    AND id_disco NOT IN (SELECT id_disco FROM vistas WHERE id_oyente = ?)
+    FROM album_catalog
+    WHERE album_id NOT IN (SELECT album_id FROM ratings WHERE user_id = ?)
+    AND album_id NOT IN (SELECT album_id FROM seen WHERE user_id = ?)
 """
 
-INSERTAR_VISTO = """
-    INSERT INTO vistas (id_oyente, id_disco, fecha) VALUES (?, ?, ?) ON CONFLICT DO NOTHING
+INSERT_SEEN = """
+    INSERT INTO seen (user_id, album_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING
 """
 
-INSERTAR_VALORADO = """
-    INSERT INTO interacciones (id_oyente, id_disco, fecha, rating) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING
+INSERT_RATING = """
+    INSERT INTO ratings (user_id, album_id, created_at, rating) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING
 """
 
-RECOMENDADOR_RANDOM = """
+RECOMMEND_RANDOM = """
     SELECT *
-    FROM discos
-    WHERE id_disco NOT IN (SELECT id_disco FROM interacciones WHERE id_oyente = ? AND COALESCE(rating, 0) > 0)
-    AND id_disco NOT IN (SELECT id_disco FROM vistas WHERE id_oyente = ?)
+    FROM album_catalog
+    WHERE album_id NOT IN (SELECT album_id FROM ratings WHERE user_id = ? AND COALESCE(rating, 0) > 0)
+    AND album_id NOT IN (SELECT album_id FROM seen WHERE user_id = ?)
     ORDER BY RANDOM()
     LIMIT {N}
 """
 
-# El rating de la comunidad sale de user_reviews (datos reales scrapeados de
-# RYM), no de las valoraciones locales de esta app. Se pide un mínimo de 5
-# reviews para que un solo voto de 5 estrellas no domine el ranking.
-RECOMENDADOR_TOP_N = """
+# Community rating comes from user_reviews (real data scraped from RYM), not
+# from this app's own local ratings. A minimum of 5 reviews is required so a
+# single 5-star vote doesn't dominate the ranking.
+RECOMMEND_TOP_N = """
     WITH t1 AS (
-    SELECT ur.album_id AS id_disco, AVG(ur.rating) AS promedio_rating
+    SELECT ur.album_id AS album_id, AVG(ur.rating) AS avg_rating
     FROM user_reviews AS ur
-    WHERE ur.album_id NOT IN (SELECT id_disco FROM interacciones WHERE id_oyente = ? AND COALESCE(rating, 0) > 0)
-    AND ur.album_id NOT IN (SELECT id_disco FROM vistas WHERE id_oyente = ?)
+    WHERE ur.album_id NOT IN (SELECT album_id FROM ratings WHERE user_id = ? AND COALESCE(rating, 0) > 0)
+    AND ur.album_id NOT IN (SELECT album_id FROM seen WHERE user_id = ?)
     GROUP BY ur.album_id
     HAVING COUNT(*) >= 5
-    ORDER BY promedio_rating DESC
+    ORDER BY avg_rating DESC
     LIMIT {N}
 )
-SELECT * FROM discos WHERE id_disco IN (SELECT id_disco FROM t1)
+SELECT * FROM album_catalog WHERE album_id IN (SELECT album_id FROM t1)
 """
 
-RECOMENDADOR_MAS_VALORADOS = """
+RECOMMEND_MOST_RATED = """
     WITH t1 AS (
-    SELECT ur.album_id AS id_disco, COUNT(*) AS valoraciones
+    SELECT ur.album_id AS album_id, COUNT(*) AS rating_count
     FROM user_reviews AS ur
-    WHERE ur.album_id NOT IN (SELECT id_disco FROM interacciones WHERE id_oyente = ? AND COALESCE(rating, 0) > 0)
-    AND ur.album_id NOT IN (SELECT id_disco FROM vistas WHERE id_oyente = ?)
+    WHERE ur.album_id NOT IN (SELECT album_id FROM ratings WHERE user_id = ? AND COALESCE(rating, 0) > 0)
+    AND ur.album_id NOT IN (SELECT album_id FROM seen WHERE user_id = ?)
     GROUP BY ur.album_id
-    ORDER BY valoraciones DESC
+    ORDER BY rating_count DESC
     LIMIT {N}
 )
-SELECT * FROM discos WHERE id_disco IN (SELECT id_disco FROM t1)
+SELECT * FROM album_catalog WHERE album_id IN (SELECT album_id FROM t1)
 """
 
-RESETEAR_VISTAS = "DELETE FROM vistas WHERE id_oyente = ? AND fecha > ?"
+RESET_SEEN = "DELETE FROM seen WHERE user_id = ? AND created_at > ?"
 
-RESETEAR_INTERACCIONES = "DELETE FROM interacciones WHERE id_oyente = ? AND fecha > ?"
+RESET_RATINGS = "DELETE FROM ratings WHERE user_id = ? AND created_at > ?"
