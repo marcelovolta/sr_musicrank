@@ -9,35 +9,35 @@ def get_index():
 
 @app.post('/')
 def post_index():
-    user_id = request.form.get('user_id')
-    if not user_id:
+    username = request.form.get('username')
+    if not username:
         return render_template('login.html')
-    # TODO: validate that user_id exists in the database
-    return redirect(f'/recommend/{user_id}')
+    # TODO: validate that username exists in the database
+    return redirect(f'/recommend/{username}')
 
 
-@app.get('/reset/<user_id>')
-def get_reset(user_id):
-    recommender.reset_recent(user_id)
-    return redirect(f'/recommend/{user_id}')
+@app.get('/reset/<username>')
+def get_reset(username):
+    recommender.reset_recent(username)
+    return redirect(f'/recommend/{username}')
 
 
-@app.get('/recommend/<user_id>')
-def get_recommend(user_id):
-    recommended_albums = recommender.recommend(user_id)
-    seen_count = recommender.count_seen(user_id)[0]['seen_count']
-    rated_count = recommender.count_rated(user_id)[0]['rated_count']
-    return render_template('recommendations.html', seen_count=seen_count, rated_count=rated_count, recommended_albums=recommended_albums, user_id=user_id)
+@app.get('/recommend/<username>')
+def get_recommend(username):
+    recommended_albums = recommender.recommend(username)
+    seen_count = recommender.count_seen(username)[0]['seen_count']
+    rated_count = recommender.count_rated(username)[0]['rated_count']
+    return render_template('recommendations.html', seen_count=seen_count, rated_count=rated_count, recommended_albums=recommended_albums, username=username)
 
 
-@app.post('/recommend/<user_id>')
-def post_recommend(user_id):
+@app.post('/recommend/<username>')
+def post_recommend(username):
     # save the rated items, then recommend again
     # seen items are saved in get_recommend, since that's where they're shown
     for album_id in request.form.keys():
         rating = int(request.form.get(album_id, 0))
-        print(f'User {user_id} rated album {album_id} with {rating}')
+        print(f'User {username} rated album {album_id} with {rating}')
         if rating > 0: # it was rated, so we save it in the ratings table
-            recommender.insert_rating(user_id, album_id, rating)
+            recommender.insert_rating(username, album_id, rating)
 
-    return redirect(f'/recommend/{user_id}')
+    return redirect(f'/recommend/{username}')
