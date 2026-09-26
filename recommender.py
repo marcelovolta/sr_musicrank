@@ -65,6 +65,20 @@ def initialize_schema():
     cur.execute(queries.DROP_VIEW_ALBUM_CATALOG)
     cur.execute(queries.CREATE_VIEW_ALBUM_CATALOG)
 
+    # per-user profile stats (top genres/artists, highest-rated album), same
+    # pre-calculate-once approach as album_stats
+    cur.execute(queries.CREATE_TABLE_USER_GENRE_STATS)
+    cur.execute(queries.CLEAR_USER_GENRE_STATS)
+    cur.execute(queries.POPULATE_USER_GENRE_STATS)
+
+    cur.execute(queries.CREATE_TABLE_USER_ARTIST_STATS)
+    cur.execute(queries.CLEAR_USER_ARTIST_STATS)
+    cur.execute(queries.POPULATE_USER_ARTIST_STATS)
+
+    cur.execute(queries.CREATE_TABLE_USER_TOP_ALBUM)
+    cur.execute(queries.CLEAR_USER_TOP_ALBUM)
+    cur.execute(queries.POPULATE_USER_TOP_ALBUM)
+
     conn.commit()
     cur.close()
     conn.close()
@@ -82,6 +96,19 @@ def count_seen(username):
 
 def unknown_albums(username):
     return sql_select(queries.UNKNOWN_ALBUMS, (username, username, username))
+
+
+def top_genres(username):
+    return sql_select(queries.TOP_GENRES, (username,))
+
+
+def top_artists(username):
+    return sql_select(queries.TOP_ARTISTS, (username,))
+
+
+def top_album(username):
+    rows = sql_select(queries.TOP_ALBUM, (username,))
+    return rows[0] if rows else None
 
 
 def insert_seen(username, albums):

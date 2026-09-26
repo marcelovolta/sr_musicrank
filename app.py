@@ -28,7 +28,10 @@ def get_recommend(username, algorithm):
     recommended_albums = recommender.recommend(username, algorithm)
     seen_count = recommender.count_seen(username)[0]['seen_count']
     rated_count = recommender.count_rated(username)[0]['rated_count']
-    return render_template('recommendations.html', seen_count=seen_count, rated_count=rated_count, recommended_albums=recommended_albums, username=username, algorithm=algorithm)
+    top_genres = recommender.top_genres(username)
+    top_artists = recommender.top_artists(username)
+    top_album = recommender.top_album(username)
+    return render_template('recommendations.html', seen_count=seen_count, rated_count=rated_count, recommended_albums=recommended_albums, username=username, algorithm=algorithm, top_genres=top_genres, top_artists=top_artists, top_album=top_album)
 
 
 @app.post('/recommend/<username>/<algorithm>')

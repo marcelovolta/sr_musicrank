@@ -24,6 +24,21 @@
         </div>
     </div>
 
+    <div class="mb-4 p-3 border rounded text-sm grid grid-cols-3 gap-4">
+        <div>
+            <span class="font-semibold">Most reviewed genres:</span>
+            {% if top_genres %}{{ top_genres|map(attribute='genre_name')|join(', ') }}{% else %}No reviews{% endif %}
+        </div>
+        <div>
+            <span class="font-semibold">Most reviewed artists:</span>
+            {% if top_artists %}{{ top_artists|map(attribute='artist_name')|join(', ') }}{% else %}No reviews{% endif %}
+        </div>
+        <div>
+            <span class="font-semibold">Highest score record:</span>
+            {% if top_album %}{{ top_album.album_title }} ({{ '%.2f'|format(top_album.rating) }}){% else %}No reviews{% endif %}
+        </div>
+    </div>
+
     <form method="post" action="/recommend/{{ username }}/{{ algorithm }}">
         <div class="grid grid-cols-3 gap-4">
             {% for album in recommended_albums %}

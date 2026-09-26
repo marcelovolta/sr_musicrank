@@ -173,6 +173,126 @@ SELECT * FROM album_catalog WHERE album_id IN (SELECT album_id FROM t1)
 RESET_SEEN = "DELETE FROM seen WHERE username = ? AND created_at > ?"
 RESET_RATINGS = "DELETE FROM ratings WHERE username = ? AND created_at > ?"
 
+# --- per-user profile stats, pre-calculated from user_reviews (static, like
+# album_stats) instead of aggregated per request. ---
+
+CREATE_TABLE_USER_GENRE_STATS = """
+    CREATE TABLE IF NOT EXISTS user_genre_stats (
+        username TEXT,
+        genre_name TEXT,
+        review_count INTEGER NOT NULL,
+        rnk INTEGER NOT NULL,
+        PRIMARY KEY (username, genre_name)
+    )
+"""
+
+CLEAR_USER_GENRE_STATS = "DELETE FROM user_genre_stats"
+
+# only the top 3 primary genres per user are kept (matches the genres shown
+# on album cards, which are also primary-only)
+POPULATE_USER_GENRE_STATS = """
+    INSERT INTO user_genre_stats (username, genre_name, review_count, rnk)
+    SELECT username, genre_name, review_count, rnk FROM (
+        SELECT
+            ur.username AS username,
+            g.name AS genre_name,
+            COUNT(*) AS review_count,
+            ROW_NUMBER() OVER (
+                PARTITION BY ur.username
+                ORDER BY COUNT(*) DESC, g.name ASC
+            ) AS rnk
+        FROM user_reviews AS ur
+        JOIN album_genres AS ag ON ag.album_id = ur.album_id AND ag.kind = 'primary'
+        JOIN genres AS g ON g.id = ag.genre_id
+        WHERE COALESCE(ur.rating, 0) > 0
+        GROUP BY ur.username, g.id
+    )
+    WHERE rnk <= 3
+"""
+
+CREATE_TABLE_USER_ARTIST_STATS = """
+    CREATE TABLE IF NOT EXISTS user_artist_stats (
+        username TEXT,
+        artist_name TEXT,
+        review_count INTEGER NOT NULL,
+        rnk INTEGER NOT NULL,
+        PRIMARY KEY (username, artist_name)
+    )
+"""
+
+CLEAR_USER_ARTIST_STATS = "DELETE FROM user_artist_stats"
+
+POPULATE_USER_ARTIST_STATS = """
+    INSERT INTO user_artist_stats (username, artist_name, review_count, rnk)
+    SELECT username, artist_name, review_count, rnk FROM (
+        SELECT
+            ur.username AS username,
+            ar.name AS artist_name,
+            COUNT(*) AS review_count,
+            ROW_NUMBER() OVER (
+                PARTITION BY ur.username
+                ORDER BY COUNT(*) DESC, ar.name ASC
+            ) AS rnk
+        FROM user_reviews AS ur
+        JOIN album_artists AS aa ON aa.album_id = ur.album_id
+        JOIN artists AS ar ON ar.id = aa.artist_id
+        WHERE COALESCE(ur.rating, 0) > 0
+        GROUP BY ur.username, ar.id
+    )
+    WHERE rnk <= 3
+"""
+
+CREATE_TABLE_USER_TOP_ALBUM = """
+    CREATE TABLE IF NOT EXISTS user_top_album (
+        username TEXT PRIMARY KEY,
+        album_id INTEGER,
+        album_title TEXT,
+        rating REAL
+    )
+"""
+
+CLEAR_USER_TOP_ALBUM = "DELETE FROM user_top_album"
+
+# ties (e.g. two 5.0 ratings) are broken by title so the pick is deterministic
+POPULATE_USER_TOP_ALBUM = """
+    INSERT INTO user_top_album (username, album_id, album_title, rating)
+    SELECT username, album_id, album_title, rating FROM (
+        SELECT
+            ur.username AS username,
+            ur.album_id AS album_id,
+            al.title AS album_title,
+            ur.rating AS rating,
+            ROW_NUMBER() OVER (
+                PARTITION BY ur.username
+                ORDER BY ur.rating DESC, al.title ASC, ur.album_id ASC
+            ) AS rnk
+        FROM user_reviews AS ur
+        JOIN albums AS al ON al.id = ur.album_id
+        WHERE COALESCE(ur.rating, 0) > 0
+    )
+    WHERE rnk = 1
+"""
+
+TOP_GENRES = """
+    SELECT genre_name, review_count
+    FROM user_genre_stats
+    WHERE username = ?
+    ORDER BY rnk
+"""
+
+TOP_ARTISTS = """
+    SELECT artist_name, review_count
+    FROM user_artist_stats
+    WHERE username = ?
+    ORDER BY rnk
+"""
+
+TOP_ALBUM = """
+    SELECT album_id, album_title, rating
+    FROM user_top_album
+    WHERE username = ?
+"""
+
 RECOMMEND_BALANCED_PROFILE = """
 WITH album_all_genres AS (
     SELECT album_id, genre_id
