@@ -34,10 +34,41 @@ CREATE_TABLE_SEEN = """
     )
 """
 
+# user_reviews is a big, static, scraped table, so review_count/avg_rating
+# per album are pre-calculated once into album_stats instead of aggregating
+# user_reviews on every recommendation request.
+CREATE_TABLE_ALBUM_STATS = """
+    CREATE TABLE IF NOT EXISTS album_stats (
+        album_id INTEGER PRIMARY KEY REFERENCES albums(id),
+        review_count INTEGER NOT NULL,
+        avg_rating REAL
+    )
+"""
+
+POPULATE_ALBUM_STATS = """
+    INSERT INTO album_stats (album_id, review_count, avg_rating)
+    SELECT
+        al.id,
+        COUNT(ur.rating),
+        AVG(ur.rating)
+    FROM albums AS al
+    LEFT JOIN user_reviews AS ur
+        ON ur.album_id = al.id AND COALESCE(ur.rating, 0) > 0
+    GROUP BY al.id
+"""
+
+CLEAR_ALBUM_STATS = "DELETE FROM album_stats"
+
+# Views can't be ALTERed in SQLite, and "CREATE VIEW IF NOT EXISTS" would
+# silently keep a stale definition around after this query changes, so it's
+# always dropped and recreated instead.
+DROP_VIEW_ALBUM_CATALOG = "DROP VIEW IF EXISTS album_catalog"
+
 # View that builds the "card" for each album, combining artist(s), primary
-# genre(s), and a cover image fallback when there isn't one.
+# genre(s), pre-calculated review stats, and a cover image fallback when
+# there isn't one.
 CREATE_VIEW_ALBUM_CATALOG = """
-    CREATE VIEW IF NOT EXISTS album_catalog AS
+    CREATE VIEW album_catalog AS
     SELECT
         al.id AS album_id,
         al.title AS title,
@@ -55,9 +86,12 @@ CREATE_VIEW_ALBUM_CATALOG = """
         ) AS genres,
         al.release_date AS release_date,
         am.descriptors AS descriptors,
-        al.cover_url AS cover_url
+        al.cover_url AS cover_url,
+        ast.review_count AS review_count,
+        ast.avg_rating AS avg_rating
     FROM albums AS al
     LEFT JOIN album_metadata AS am ON am.album_id = al.id
+    LEFT JOIN album_stats AS ast ON ast.album_id = al.id
 """
 
 # A "rated" album is one the user scored either in this app (local ratings

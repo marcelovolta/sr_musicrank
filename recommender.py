@@ -55,6 +55,14 @@ def initialize_schema():
 
     cur.execute(queries.CREATE_TABLE_RATINGS)
     cur.execute(queries.CREATE_TABLE_SEEN)
+
+    # user_reviews is static, so review_count/avg_rating are calculated once
+    # here rather than aggregated on every recommendation request
+    cur.execute(queries.CREATE_TABLE_ALBUM_STATS)
+    cur.execute(queries.CLEAR_ALBUM_STATS)
+    cur.execute(queries.POPULATE_ALBUM_STATS)
+
+    cur.execute(queries.DROP_VIEW_ALBUM_CATALOG)
     cur.execute(queries.CREATE_VIEW_ALBUM_CATALOG)
 
     conn.commit()

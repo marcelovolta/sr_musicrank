@@ -40,8 +40,13 @@
                     <h2 class="card-title font-semibold link">
                         <a href="/albums/{{ album.album_id }}">{{ album.title }}</a>
                     </h2>
-                    <span class="text-sm">
-                        {{ album.artists }} - {{ album.genres }}{% if album.release_date %} - {{ album.release_date }}{% endif %}
+                    <span class="text-sm">Artist: {{ album.artists }}</span>
+                    <span class="text-sm">{{ album.genres }}</span>
+                    {% if album.release_date %}
+                    <span class="text-sm">Release date: {{ album.release_date }}</span>
+                    {% endif %}
+                    <span class="text-xs text-neutral-500">
+                        Reviewed {{ album.review_count }} time{{ 's' if album.review_count != 1 else '' }}{% if album.avg_rating is not none %} - Avg. Rating: {{ '%.2f'|format(album.avg_rating) }}{% endif %}
                     </span>
                     {% if album.descriptors %}
                     <span class="text-xs">{{ album.descriptors|truncate(400) }}</span>
