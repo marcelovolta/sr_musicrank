@@ -16,6 +16,17 @@
                 <input type="text" name="username" minlength="3" maxlength="30" required class="p-1 border rounded">
             </label>
         </div>
+        <div class="flex mb-4">
+            <label>
+                Recommendation algorithm:
+                <select name="algorithm" class="p-1 border rounded">
+                    <option value="balanced" selected>Balanced (personalized)</option>
+                    <option value="top_n">Top rated</option>
+                    <option value="most_rated">Most reviewed</option>
+                    <option value="random">Random</option>
+                </select>
+            </label>
+        </div>
         <div class="flex justify-end">
             <button type="submit" class="border bg-teal-500 hover:bg-teal-700 text-white text-lg py-2 px-4 ml-auto">
                 Log In

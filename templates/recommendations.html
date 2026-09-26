@@ -16,13 +16,13 @@
     <div class="flex justify-between">
         <h1 class="mb-4 text-lg font-bold">Recommendations for {{ username }}</h1>
         <div>
-            <small>{{ seen_count }} seen, {{ rated_count }} rated - <a href="/reset/{{ username }}"
+            <small>{{ seen_count }} seen, {{ rated_count }} rated, {{ algorithm }} algorithm - <a href="/reset/{{ username }}/{{ algorithm }}"
                     class="bg-teal-400 text-white font-semibold text-xs px-2 py-1 mt-2 rounded cursor-pointer">reset</a>
             </small>
         </div>
     </div>
 
-    <form method="post" action="/recommend/{{ username }}">
+    <form method="post" action="/recommend/{{ username }}/{{ algorithm }}">
         <div class="grid grid-cols-3 gap-4">
             {% for album in recommended_albums %}
             <div class="card card-side bg-base-100 shadow-sm border bg-base-100">

@@ -111,11 +111,18 @@ def reset_recent(username, cutoff_date='2026-09-01 23:59:59'):
     sql_execute(queries.RESET_RATINGS, (username, cutoff_date))
 
 
-def recommend(username, N=9):
-    # return recommend_random(username, N)
-    # return recommend_top_n(username, N)
-    # rec = recommend_most_rated(username, N)
-    rec = recommend_balanced_profile(username, N)
+ALGORITHMS = {
+    'random': recommend_random,
+    'top_n': recommend_top_n,
+    'most_rated': recommend_most_rated,
+    'balanced': recommend_balanced_profile,
+}
+DEFAULT_ALGORITHM = 'balanced'
+
+
+def recommend(username, algorithm=DEFAULT_ALGORITHM, N=9):
+    recommend_fn = ALGORITHMS.get(algorithm, ALGORITHMS[DEFAULT_ALGORITHM])
+    rec = recommend_fn(username, N)
 
     insert_seen(username, rec)
     return rec
