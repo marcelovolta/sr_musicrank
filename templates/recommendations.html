@@ -44,7 +44,7 @@
             {% for album in recommended_albums %}
             <div class="card card-side bg-base-100 shadow-sm border bg-base-100">
                 {% if album.cover_url %}
-                <img src="{{ album.cover_url }}" class="w-full max-w-40 object-cover" />
+                <img src="{{ album.cover_url }}" class="w-full max-w-40 object-contain bg-neutral-900" />
                 {% else %}
                 <div class="w-full max-w-40 flex items-center justify-center bg-neutral-700 text-neutral-300 text-4xl">
                     ♪
