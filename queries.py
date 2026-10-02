@@ -466,9 +466,13 @@ inner join selected_albums_genre sag
 on al.id = sag.album_id
 where not exists (select 1 from seen where seen.username = ? and seen.album_id = al.id)
 and not exists (select 1 from user_reviews ur where ur.username = ? and ur.album_id = al.id)
+and not exists (select 1 from ratings rt where rt.username = ? and rt.album_id = al.id and coalesce(rt.rating, 0) > 0)
 order by final_rating desc
 ),
 
+-- fallback pool for when the tunnel_vision tier comes up short of N; excluded
+-- from it explicitly (not just by applying the same per-user filters) so an
+-- album that qualifies for both tiers can't appear twice in the final list
 popular_albums AS (
     SELECT
         album_id,
@@ -477,6 +481,10 @@ popular_albums AS (
         (0.8 * AVG(rating)) + (0.2 * COUNT(*)) AS corr_rating,
         1 as sorting
     FROM user_reviews
+    WHERE album_id NOT IN (SELECT album_id FROM tunnel_vision)
+      AND album_id NOT IN (SELECT album_id FROM ratings WHERE username = ? AND COALESCE(rating, 0) > 0)
+      AND album_id NOT IN (SELECT album_id FROM seen WHERE username = ?)
+      AND album_id NOT IN (SELECT album_id FROM user_reviews WHERE username = ? AND COALESCE(rating, 0) > 0)
     GROUP BY album_id
     HAVING COUNT(*) > 5
 ),

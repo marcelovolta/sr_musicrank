@@ -144,8 +144,9 @@ def recommend_balanced_profile(username, N=9):
 def recommend_tunnel_vision(username, N=9):
     query = queries.RECOMMEND_TUNNEL_VISION.format(N=N)
     # order: fav_genres username, fav_artists username, then the
-    # tunnel_vision exclusions (seen, user_reviews)
-    return sql_select(query, (username, username, username, username))
+    # tunnel_vision exclusions (seen, user_reviews, ratings), then the
+    # popular_albums fallback's own exclusions (ratings, seen, user_reviews)
+    return sql_select(query, (username,) * 8)
 
 def reset_recent(username, cutoff_date='2026-09-01 23:59:59'):
     sql_execute(queries.RESET_SEEN, (username, cutoff_date))
