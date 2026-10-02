@@ -153,7 +153,9 @@ RECOMMEND_TOP_N = """
     ORDER BY avg_rating DESC
     LIMIT {N}
 )
-SELECT * FROM album_catalog WHERE album_id IN (SELECT album_id FROM t1)
+SELECT album_catalog.* FROM album_catalog
+JOIN t1 ON t1.album_id = album_catalog.album_id
+ORDER BY t1.avg_rating DESC
 """
 
 RECOMMEND_MOST_RATED = """
@@ -167,7 +169,9 @@ RECOMMEND_MOST_RATED = """
     ORDER BY rating_count DESC
     LIMIT {N}
 )
-SELECT * FROM album_catalog WHERE album_id IN (SELECT album_id FROM t1)
+SELECT album_catalog.* FROM album_catalog
+JOIN t1 ON t1.album_id = album_catalog.album_id
+ORDER BY t1.rating_count DESC
 """
 
 RESET_SEEN = "DELETE FROM seen WHERE username = ? AND created_at > ?"
@@ -388,5 +392,7 @@ WHERE fog.album_id NOT IN (SELECT album_id FROM ratings WHERE username = ? AND C
 ORDER BY global_rating DESC, fog.album_id
 LIMIT {N}
 )
-SELECT * FROM album_catalog WHERE album_id IN (SELECT album_id FROM final_select)
+SELECT album_catalog.* FROM album_catalog
+JOIN final_select ON final_select.album_id = album_catalog.album_id
+ORDER BY final_select.global_rating DESC, final_select.album_id
 """
