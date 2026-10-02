@@ -21,6 +21,7 @@
                 Recommendation algorithm:
                 <select name="algorithm" id="algorithm" class="p-1 border rounded" onchange="updateAlgorithmDescription()">
                     <option value="balanced" selected>Balanced (personalized)</option>
+                    <option value="tunnel_vision">Tunnel vision (personalized)</option>
                     <option value="top_n">Top rated</option>
                     <option value="most_rated">Most reviewed</option>
                     <option value="random">Random</option>
@@ -37,6 +38,7 @@
     <script>
         const algorithmDescriptions = {
             balanced: "Personalized picks based on your own genre and artist ratings on RYM, weighted against how well-reviewed each album is overall.",
+            tunnel_vision: "A narrower, more intense version of the personalized pick: albums must match BOTH a genre and an artist you've rated highly. Falls back to generally popular albums if there aren't enough matches.",
             top_n: "The highest community-rated albums on RYM (with at least 5 reviews) that you haven't rated or seen yet.",
             most_rated: "The most-reviewed albums on RYM that you haven't rated or seen yet.",
             random: "A random sample of albums you haven't rated or seen yet."

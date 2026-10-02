@@ -396,3 +396,111 @@ SELECT album_catalog.* FROM album_catalog
 JOIN final_select ON final_select.album_id = album_catalog.album_id
 ORDER BY final_select.global_rating DESC, final_select.album_id
 """
+
+# Narrower than balanced_profile: an album must match BOTH a genre and an
+# artist the user already favors (inner joins, not left joins), falling back
+# to generally popular albums (sorting=1) if that intersection comes up
+# short of N.
+RECOMMEND_TUNNEL_VISION = """
+with fav_genres as (
+select
+    ag.genre_id,
+    count(distinct ur.id) genre_count,
+    avg(ur.rating) as avg_rating,
+    (0.8 * avg(ur.rating)) + (0.2 * count(distinct ur.id)) as corr_rating_genre
+from user_reviews ur
+inner join album_genres ag
+on ur.album_id  = ag.album_id
+where ur.username = ?
+group by ag.genre_id
+),
+
+fav_artists as (
+select
+    aa.artist_id,
+    count(distinct ur.id) artist_count,
+    avg(ur.rating) as avg_rating,
+    (0.8 * avg(ur.rating)) + (0.2 * count(distinct ur.id)) as corr_rating_artist
+from user_reviews ur
+inner join album_artists aa
+on ur.album_id  = aa.album_id
+where ur.username = ?
+group by aa.artist_id
+),
+
+selected_albums_genre as (
+select
+    al.id as album_id,
+    sum(fg.corr_rating_genre) as global_corr_rating_genre
+from albums al
+inner join album_genres ag
+on al.id = ag.album_id
+inner join fav_genres fg
+on ag.genre_id = fg.genre_id
+group by al.id
+),
+
+selected_albums_artist as (
+select
+    al.id as album_id,
+    sum(fa.corr_rating_artist) as global_corr_rating_artist
+from albums al
+inner join album_artists aa
+on al.id = aa.album_id
+inner join fav_artists fa
+on aa.artist_id = fa.artist_id
+group by al.id
+),
+
+tunnel_vision as (
+select
+    al.id as album_id,
+    saa.global_corr_rating_artist,
+    sag.global_corr_rating_genre,
+    saa.global_corr_rating_artist + sag.global_corr_rating_genre as final_rating,
+    0 as sorting
+from albums al
+inner join selected_albums_artist saa
+on al.id = saa.album_id
+inner join selected_albums_genre sag
+on al.id = sag.album_id
+where not exists (select 1 from seen where seen.username = ? and seen.album_id = al.id)
+and not exists (select 1 from user_reviews ur where ur.username = ? and ur.album_id = al.id)
+order by final_rating desc
+),
+
+popular_albums AS (
+    SELECT
+        album_id,
+        AVG(rating) AS avg_rating,
+        COUNT(*) AS review_count,
+        (0.8 * AVG(rating)) + (0.2 * COUNT(*)) AS corr_rating,
+        1 as sorting
+    FROM user_reviews
+    GROUP BY album_id
+    HAVING COUNT(*) > 5
+),
+
+pre_selection as (
+select
+    album_id,
+    final_rating,
+    sorting
+from tunnel_vision
+union
+select
+    album_id,
+    corr_rating as final_rating,
+    sorting
+from popular_albums
+)
+
+select
+    ac.*
+from pre_selection as ps
+inner join album_catalog as ac
+on ps.album_id = ac.album_id
+order by ps.sorting asc,
+ps.final_rating desc
+limit {N}
+"""
