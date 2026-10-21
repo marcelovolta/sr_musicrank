@@ -1,8 +1,10 @@
 import sqlite3
 import os
 from datetime import datetime
+from itertools import islice
 
 import queries
+import surprise_models
 
 
 DATABASE_FILE = os.path.dirname(__file__) + '/data/mergenres.db'
@@ -148,6 +150,30 @@ def recommend_tunnel_vision(username, N=9):
     # popular_albums fallback's own exclusions (ratings, seen, user_reviews)
     return sql_select(query, (username,) * 8)
 
+def recommend_surprise(name, username, N=9):
+    # the N albums with the highest rating predicted by the Surprise model,
+    # leaving out the ones the user already rated or has seen
+    excluded = {r['album_id'] for r in sql_select(queries.SURPRISE_EXCLUDED_ALBUMS, (username,) * 3)}
+
+    ranking = surprise_models.ranking(name, DATABASE_FILE, username)
+    top = list(islice((album_id for album_id, _ in ranking if album_id not in excluded), N))
+    if not top:
+        return []
+
+    query = queries.SURPRISE_CATALOG_ALBUMS.format(placeholders=', '.join('?' * len(top)))
+    albums = sql_select(query, top)
+    position = {album_id: i for i, album_id in enumerate(top)}
+    return sorted(albums, key=lambda r: position[r['album_id']])
+
+def recommend_baseline(username, N=9):
+    return recommend_surprise('baseline', username, N)
+
+def recommend_knn(username, N=9):
+    return recommend_surprise('knn', username, N)
+
+def recommend_svd(username, N=9):
+    return recommend_surprise('svd', username, N)
+
 def reset_recent(username, cutoff_date='2026-09-01 23:59:59'):
     sql_execute(queries.RESET_SEEN, (username, cutoff_date))
     sql_execute(queries.RESET_RATINGS, (username, cutoff_date))
@@ -159,6 +185,9 @@ ALGORITHMS = {
     'most_rated': recommend_most_rated,
     'balanced': recommend_balanced_profile,
     'tunnel_vision': recommend_tunnel_vision,
+    'baseline': recommend_baseline,
+    'knn': recommend_knn,
+    'svd': recommend_svd,
 }
 DEFAULT_ALGORITHM = 'balanced'
 

@@ -512,3 +512,35 @@ order by ps.sorting asc,
 ps.final_rating desc
 limit {N}
 """
+
+# --- Surprise models (surprise_models.py) ---
+
+# Training data: RYM reviews (0.5-5 stars) plus this app's own ratings, which
+# use a 1-10 scale and are halved to match. When a user rated an album in both
+# places, the app rating wins.
+SURPRISE_TRAINING_RATINGS = """
+    SELECT username, album_id, rating / 2.0 AS rating
+    FROM ratings
+    WHERE COALESCE(rating, 0) > 0
+    UNION ALL
+    SELECT ur.username, ur.album_id, ur.rating
+    FROM user_reviews AS ur
+    WHERE COALESCE(ur.rating, 0) > 0
+    AND NOT EXISTS (
+        SELECT 1 FROM ratings AS rt
+        WHERE rt.username = ur.username AND rt.album_id = ur.album_id AND COALESCE(rt.rating, 0) > 0
+    )
+"""
+
+# albums the user already rated (locally or on RYM) or has seen
+SURPRISE_EXCLUDED_ALBUMS = """
+    SELECT album_id FROM ratings WHERE username = ? AND COALESCE(rating, 0) > 0
+    UNION
+    SELECT album_id FROM seen WHERE username = ?
+    UNION
+    SELECT album_id FROM user_reviews WHERE username = ? AND COALESCE(rating, 0) > 0
+"""
+
+SURPRISE_CATALOG_ALBUMS = """
+    SELECT * FROM album_catalog WHERE album_id IN ({placeholders})
+"""

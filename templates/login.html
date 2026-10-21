@@ -25,6 +25,9 @@
                     <option value="top_n">Top rated</option>
                     <option value="most_rated">Most reviewed</option>
                     <option value="random">Random</option>
+                    <option value="baseline">Baseline (Surprise)</option>
+                    <option value="knn">KNN (Surprise)</option>
+                    <option value="svd">SVD (Surprise)</option>
                 </select>
             </label>
             <p id="algorithm-description" class="text-xs text-neutral-500 mt-1"></p>
@@ -41,7 +44,10 @@
             tunnel_vision: "A narrower, more intense version of the personalized pick: albums must match BOTH a genre and an artist you've rated highly. Falls back to generally popular albums if there aren't enough matches.",
             top_n: "The highest community-rated albums on RYM (with at least 5 reviews) that you haven't rated or seen yet.",
             most_rated: "The most-reviewed albums on RYM that you haven't rated or seen yet.",
-            random: "A random sample of albums you haven't rated or seen yet."
+            random: "A random sample of albums you haven't rated or seen yet.",
+            baseline: "Predicts your rating for each album from the overall average plus your bias as a reviewer and the album's bias (BaselineOnly).",
+            knn: "Predicts your rating from the 40 albums most similar to the ones you've rated (item-based KNNWithMeans). Falls back to Baseline if you haven't rated anything yet.",
+            svd: "Predicts your rating from latent user and album factors learned by matrix factorization (SVD)."
         };
 
         function updateAlgorithmDescription() {
