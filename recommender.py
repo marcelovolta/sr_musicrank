@@ -5,6 +5,7 @@ from itertools import islice
 
 import queries
 import surprise_models
+import tower_models
 
 
 DATABASE_FILE = os.path.dirname(__file__) + '/data/mergenres.db'
@@ -150,13 +151,15 @@ def recommend_tunnel_vision(username, N=9):
     # popular_albums fallback's own exclusions (ratings, seen, user_reviews)
     return sql_select(query, (username,) * 8)
 
-def recommend_surprise(name, username, N=9):
-    # the N albums with the highest rating predicted by the Surprise model,
-    # leaving out the ones the user already rated or has seen
+def _recommend_from_ranking(username, N, ranking):
+    # the first N albums of a model's ranking (highest predicted rating first),
+    # leaving out the ones the user already rated or has seen.
+    # ranking(is_candidate) yields (album_id, predicted rating) pairs
     excluded = {r['album_id'] for r in sql_select(queries.SURPRISE_EXCLUDED_ALBUMS, (username,) * 3)}
+    def is_candidate(album_id):
+        return album_id not in excluded
 
-    ranking = surprise_models.ranking(name, DATABASE_FILE, username)
-    top = list(islice((album_id for album_id, _ in ranking if album_id not in excluded), N))
+    top = list(islice((album_id for album_id, _ in ranking(is_candidate) if is_candidate(album_id)), N))
     if not top:
         return []
 
@@ -164,6 +167,9 @@ def recommend_surprise(name, username, N=9):
     albums = sql_select(query, top)
     position = {album_id: i for i, album_id in enumerate(top)}
     return sorted(albums, key=lambda r: position[r['album_id']])
+
+def recommend_surprise(name, username, N=9):
+    return _recommend_from_ranking(username, N, lambda is_candidate: surprise_models.ranking(name, DATABASE_FILE, username))
 
 def recommend_baseline(username, N=9):
     return recommend_surprise('baseline', username, N)
@@ -173,6 +179,15 @@ def recommend_knn(username, N=9):
 
 def recommend_svd(username, N=9):
     return recommend_surprise('svd', username, N)
+
+def recommend_towers(name, username, N=9):
+    return _recommend_from_ranking(username, N, lambda is_candidate: tower_models.ranking(name, DATABASE_FILE, username, is_candidate))
+
+def recommend_two_towers(username, N=9):
+    return recommend_towers('two_towers', username, N)
+
+def recommend_big_tower(username, N=9):
+    return recommend_towers('big_tower', username, N)
 
 def reset_recent(username, cutoff_date='2026-09-01 23:59:59'):
     sql_execute(queries.RESET_SEEN, (username, cutoff_date))
@@ -188,6 +203,8 @@ ALGORITHMS = {
     'baseline': recommend_baseline,
     'knn': recommend_knn,
     'svd': recommend_svd,
+    'two_towers': recommend_two_towers,
+    'big_tower': recommend_big_tower,
 }
 DEFAULT_ALGORITHM = 'balanced'
 

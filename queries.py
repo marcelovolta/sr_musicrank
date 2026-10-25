@@ -544,3 +544,15 @@ SURPRISE_EXCLUDED_ALBUMS = """
 SURPRISE_CATALOG_ALBUMS = """
     SELECT * FROM album_catalog WHERE album_id IN ({placeholders})
 """
+
+# one row per album with the features the big_tower model uses: its first
+# credited artist, first primary genre, language and release year
+TOWER_ALBUM_FEATURES = """
+    SELECT
+        al.id AS album_id,
+        (SELECT aa.artist_id FROM album_artists AS aa WHERE aa.album_id = al.id ORDER BY aa.position LIMIT 1) AS artist,
+        (SELECT ag.genre_id FROM album_genres AS ag WHERE ag.album_id = al.id AND ag.kind = 'primary' ORDER BY ag.rowid LIMIT 1) AS genre,
+        al.language AS language,
+        SUBSTR(al.release_date, -4) AS release_year
+    FROM albums AS al
+"""

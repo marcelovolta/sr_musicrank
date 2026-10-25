@@ -28,6 +28,8 @@
                     <option value="baseline">Baseline (Surprise)</option>
                     <option value="knn">KNN (Surprise)</option>
                     <option value="svd">SVD (Surprise)</option>
+                    <option value="two_towers">Two towers (neural network)</option>
+                    <option value="big_tower">One big tower (neural network)</option>
                 </select>
             </label>
             <p id="algorithm-description" class="text-xs text-neutral-500 mt-1"></p>
@@ -47,7 +49,9 @@
             random: "A random sample of albums you haven't rated or seen yet.",
             baseline: "Predicts your rating for each album from the overall average plus your bias as a reviewer and the album's bias (BaselineOnly).",
             knn: "Predicts your rating from the 40 albums most similar to the ones you've rated (item-based KNNWithMeans). Falls back to Baseline if you haven't rated anything yet.",
-            svd: "Predicts your rating from latent user and album factors learned by matrix factorization (SVD)."
+            svd: "Predicts your rating from latent user and album factors learned by matrix factorization (SVD).",
+            two_towers: "A neural network picks the 100 albums closest to your taste by comparing your embedding with each album's, and a second network orders them by the rating it predicts you'd give. If you have no ratings yet, uses Baseline.",
+            big_tower: "A neural network predicts your rating for each album from you, the album, its artist, primary genre, language and release year. If you have no ratings yet, uses Baseline."
         };
 
         function updateAlgorithmDescription() {
