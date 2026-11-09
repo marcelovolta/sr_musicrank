@@ -3,9 +3,9 @@ import os
 from datetime import datetime
 from itertools import islice
 
+import ensemble
+import models
 import queries
-import surprise_models
-import tower_models
 
 
 DATABASE_FILE = os.path.dirname(__file__) + '/data/mergenres.db'
@@ -152,42 +152,63 @@ def recommend_tunnel_vision(username, N=9):
     return sql_select(query, (username,) * 8)
 
 def _recommend_from_ranking(username, N, ranking):
-    # the first N albums of a model's ranking (highest predicted rating first),
-    # leaving out the ones the user already rated or has seen.
-    # ranking(is_candidate) yields (album_id, predicted rating) pairs
-    excluded = {r['album_id'] for r in sql_select(queries.SURPRISE_EXCLUDED_ALBUMS, (username,) * 3)}
-    def is_candidate(album_id):
-        return album_id not in excluded
-
-    top = list(islice((album_id for album_id, _ in ranking(is_candidate) if is_candidate(album_id)), N))
+    # the first N albums of a ranking of (album_id, score) pairs, best first,
+    # leaving out the ones the user already rated or has seen
+    excluded = {r['album_id'] for r in sql_select(queries.EXCLUDED_ALBUMS, (username,) * 3)}
+    top = list(islice((album_id for album_id, _ in ranking if album_id not in excluded), N))
     if not top:
         return []
 
-    query = queries.SURPRISE_CATALOG_ALBUMS.format(placeholders=', '.join('?' * len(top)))
-    albums = sql_select(query, top)
+    query = queries.CATALOG_ALBUMS.format(placeholders=', '.join('?' * len(top)))
+    albums = sql_select(query, [int(a) for a in top])
     position = {album_id: i for i, album_id in enumerate(top)}
     return sorted(albums, key=lambda r: position[r['album_id']])
 
-def recommend_surprise(name, username, N=9):
-    return _recommend_from_ranking(username, N, lambda is_candidate: surprise_models.ranking(name, DATABASE_FILE, username))
 
-def recommend_baseline(username, N=9):
-    return recommend_surprise('baseline', username, N)
+MODEL_NAMES = (*models.NAMES, 'ensemble')
+COLD_START = 2  # in the cascades, users with up to 2 reviews get top_n
 
-def recommend_knn(username, N=9):
-    return recommend_surprise('knn', username, N)
 
-def recommend_svd(username, N=9):
-    return recommend_surprise('svd', username, N)
+def _ranking(name, username):
+    # ranking of a trained model; the ensemble lives in its own module
+    return ensemble.ranking(username) if name == 'ensemble' else models.ranking(name, username)
 
-def recommend_towers(name, username, N=9):
-    return _recommend_from_ranking(username, N, lambda is_candidate: tower_models.ranking(name, DATABASE_FILE, username, is_candidate))
 
-def recommend_two_towers(username, N=9):
-    return recommend_towers('two_towers', username, N)
+def _knows_user(name, username):
+    # whether the model has the user (if not, the cascades use tunnel_vision)
+    return ensemble.knows_user(username) if name == 'ensemble' else models.knows_user(name, username)
 
-def recommend_big_tower(username, N=9):
-    return recommend_towers('big_tower', username, N)
+
+def recommend_model(name):
+    # recommender with one of the trained models (models.py or ensemble.py)
+    def recommend_fn(username, N=9):
+        # the first N of the model's ranking, without what was already rated or seen
+        return _recommend_from_ranking(username, N, _ranking(name, username))
+    return recommend_fn
+
+
+def recommend_average(username, N=9):
+    # the ensemble's candidates ordered by the simple average of the
+    # standardized scores, instead of LightGBM
+    return _recommend_from_ranking(username, N, ensemble.ranking(username, average=True))
+
+
+def recommend_cascade(name):
+    # Chooses the algorithm by how well the user is known: cold start (up to
+    # COLD_START reviews) with top_n; if the model doesn't know the user (not
+    # in its universe: fewer than dataset.MIN_USER_FINAL reviews when it was
+    # trained) with tunnel_vision, which can recommend any album; the rest with
+    # the model
+    model_fn = recommend_model(name)
+    def recommend_fn(username, N=9):
+        # the cascade for one user
+        if count_rated(username)[0]['rated_count'] <= COLD_START:
+            return recommend_top_n(username, N)
+        if not _knows_user(name, username):
+            return recommend_tunnel_vision(username, N)
+        return model_fn(username, N)
+    return recommend_fn
+
 
 def reset_recent(username, cutoff_date='2026-09-01 23:59:59'):
     sql_execute(queries.RESET_SEEN, (username, cutoff_date))
@@ -200,11 +221,9 @@ ALGORITHMS = {
     'most_rated': recommend_most_rated,
     'balanced': recommend_balanced_profile,
     'tunnel_vision': recommend_tunnel_vision,
-    'baseline': recommend_baseline,
-    'knn': recommend_knn,
-    'svd': recommend_svd,
-    'two_towers': recommend_two_towers,
-    'big_tower': recommend_big_tower,
+    **{name: recommend_model(name) for name in MODEL_NAMES},
+    'average': recommend_average,
+    **{f'cascade_{name}': recommend_cascade(name) for name in MODEL_NAMES},
 }
 DEFAULT_ALGORITHM = 'balanced'
 

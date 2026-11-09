@@ -7,3 +7,6 @@ data/*.db-journal
 
 # trained Surprise models (regenerated when missing)
 models/
+
+# work copy of the database, Optuna studies and pipeline logs
+data/work/

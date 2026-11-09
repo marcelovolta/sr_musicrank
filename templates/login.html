@@ -26,10 +26,18 @@
                     <option value="most_rated">Most reviewed</option>
                     <option value="random">Random</option>
                     <option value="baseline">Baseline (Surprise)</option>
-                    <option value="knn">KNN (Surprise)</option>
                     <option value="svd">SVD (Surprise)</option>
+                    <option value="ease">EASE</option>
                     <option value="two_towers">Two towers (neural network)</option>
                     <option value="big_tower">One big tower (neural network)</option>
+                    <option value="ensemble">Ensemble (LightGBM)</option>
+                    <option value="average">Model average</option>
+                    <option value="cascade_baseline">Cascade baseline</option>
+                    <option value="cascade_svd">Cascade SVD</option>
+                    <option value="cascade_ease">Cascade EASE</option>
+                    <option value="cascade_two_towers">Cascade two towers</option>
+                    <option value="cascade_big_tower">Cascade big tower</option>
+                    <option value="cascade_ensemble">Cascade ensemble</option>
                 </select>
             </label>
             <p id="algorithm-description" class="text-xs text-neutral-500 mt-1"></p>
@@ -47,11 +55,19 @@
             top_n: "The highest community-rated albums on RYM (with at least 5 reviews) that you haven't rated or seen yet.",
             most_rated: "The most-reviewed albums on RYM that you haven't rated or seen yet.",
             random: "A random sample of albums you haven't rated or seen yet.",
-            baseline: "Predicts your rating for each album from the overall average plus your bias as a reviewer and the album's bias (BaselineOnly).",
-            knn: "Predicts your rating from the 40 albums most similar to the ones you've rated (item-based KNNWithMeans). Falls back to Baseline if you haven't rated anything yet.",
-            svd: "Predicts your rating from latent user and album factors learned by matrix factorization (SVD).",
-            two_towers: "A neural network picks the 100 albums closest to your taste by comparing your embedding with each album's, and a second network orders them by the rating it predicts you'd give. If you have no ratings yet, uses Baseline.",
-            big_tower: "A neural network predicts your rating for each album from you, the album, its artist, primary genre, language and release year. If you have no ratings yet, uses Baseline."
+            baseline: "The albums with the highest bias in a BaselineOnly model (overall average + reviewer bias + album bias): the same for everyone. If the model doesn't know you yet, the most reviewed albums.",
+            svd: "Predicts your rating from latent user and album factors learned by matrix factorization (SVD). If the model doesn't know you yet, the most reviewed albums.",
+            ease: "Albums that tend to be reviewed together with the ones you reviewed (EASE, a linear album-to-album model). If the model doesn't know you yet, the most reviewed albums.",
+            two_towers: "A neural network turns you and each album into vectors and recommends the albums closest to you, trained to guess what you'll review next. If the model doesn't know you yet, the most reviewed albums.",
+            big_tower: "A neural network estimates the chance that you review each album from you, the album, its artist, primary genre, language and release year. If the model doesn't know you yet, the most reviewed albums.",
+            ensemble: "Combines SVD, EASE, two towers and big tower: a LightGBM model reorders the albums each one proposes, using their scores and your affinity with each album's artist, genre and language.",
+            average: "Combines SVD, EASE, two towers and big tower: orders the albums each one proposes by the average of their scores.",
+            cascade_baseline: "Picks the algorithm by how well it knows you: with up to 2 reviews, the top rated albums; if the model doesn't know you yet (fewer than 5 reviews when it was trained), tunnel vision; otherwise, Baseline.",
+            cascade_svd: "Picks the algorithm by how well it knows you: with up to 2 reviews, the top rated albums; if the model doesn't know you yet (fewer than 5 reviews when it was trained), tunnel vision; otherwise, SVD.",
+            cascade_ease: "Picks the algorithm by how well it knows you: with up to 2 reviews, the top rated albums; if the model doesn't know you yet (fewer than 5 reviews when it was trained), tunnel vision; otherwise, EASE.",
+            cascade_two_towers: "Picks the algorithm by how well it knows you: with up to 2 reviews, the top rated albums; if the model doesn't know you yet (fewer than 5 reviews when it was trained), tunnel vision; otherwise, two towers.",
+            cascade_big_tower: "Picks the algorithm by how well it knows you: with up to 2 reviews, the top rated albums; if the model doesn't know you yet (fewer than 5 reviews when it was trained), tunnel vision; otherwise, the big tower.",
+            cascade_ensemble: "Picks the algorithm by how well it knows you: with up to 2 reviews, the top rated albums; if no model knows you yet (fewer than 5 reviews when they were trained), tunnel vision; otherwise, the ensemble."
         };
 
         function updateAlgorithmDescription() {
