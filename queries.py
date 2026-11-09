@@ -111,14 +111,6 @@ COUNT_SEEN = """
     WHERE username = ?
 """
 
-UNKNOWN_ALBUMS = """
-    SELECT *
-    FROM album_catalog
-    WHERE album_id NOT IN (SELECT album_id FROM ratings WHERE username = ?)
-    AND album_id NOT IN (SELECT album_id FROM seen WHERE username = ?)
-    AND album_id NOT IN (SELECT album_id FROM user_reviews WHERE username = ? AND COALESCE(rating, 0) > 0)
-"""
-
 INSERT_SEEN = """
     INSERT INTO seen (username, album_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING
 """

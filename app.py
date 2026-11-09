@@ -5,10 +5,12 @@ app = Flask(__name__)
 
 @app.get('/')
 def get_index():
+    # login screen: username and algorithm
     return render_template('login.html')
 
 @app.post('/')
 def post_index():
+    # takes the chosen username and algorithm and goes to their recommendations
     username = request.form.get('username')
     algorithm = request.form.get('algorithm', recommender.DEFAULT_ALGORITHM)
     if not username:
@@ -19,12 +21,14 @@ def post_index():
 
 @app.get('/reset/<username>/<algorithm>')
 def get_reset(username, algorithm):
+    # deletes what the user saw and rated in the app, and recommends again
     recommender.reset_recent(username)
     return redirect(f'/recommend/{username}/{algorithm}')
 
 
 @app.get('/recommend/<username>/<algorithm>')
 def get_recommend(username, algorithm):
+    # shows the recommendations (recording them as seen) and the user's profile
     recommended_albums = recommender.recommend(username, algorithm)
     seen_count = recommender.count_seen(username)[0]['seen_count']
     rated_count = recommender.count_rated(username)[0]['rated_count']

@@ -11,6 +11,7 @@ import queries
 DATABASE_FILE = os.path.dirname(__file__) + '/data/mergenres.db'
 
 def sql_select(query, params=()):
+    # runs a SELECT on the app's database and returns its rows
     conn = sqlite3.connect(DATABASE_FILE)
     conn.row_factory = sqlite3.Row # so fetchall returns rows we can index by column name
     cur = conn.cursor()
@@ -24,6 +25,7 @@ def sql_select(query, params=()):
 
 
 def sql_execute(query, params=()):
+    # runs a write (INSERT, DELETE...) on the app's database and commits it
     conn = sqlite3.connect(DATABASE_FILE)
     cur = conn.cursor()
 
@@ -35,6 +37,7 @@ def sql_execute(query, params=()):
 
 
 def _has_column(cur, table, column):
+    # whether a table has a column (for the migration of older databases)
     cur.execute(f"PRAGMA table_info({table})")
     return any(row[1] == column for row in cur.fetchall())
 
@@ -91,35 +94,38 @@ initialize_schema()
 
 
 def count_rated(username):
+    # albums the user rated, in this app or on RYM (also decides the cascades' branch)
     return sql_select(queries.COUNT_RATED, (username, username))
 
 
 def count_seen(username):
+    # albums this app already showed the user
     return sql_select(queries.COUNT_SEEN, (username,))
 
-def unknown_albums(username):
-    return sql_select(queries.UNKNOWN_ALBUMS, (username, username, username))
-
-
 def top_genres(username):
+    # the user's 3 most reviewed primary genres (profile panel)
     return sql_select(queries.TOP_GENRES, (username,))
 
 
 def top_artists(username):
+    # the user's 3 most reviewed artists (profile panel)
     return sql_select(queries.TOP_ARTISTS, (username,))
 
 
 def top_album(username):
+    # the user's highest rated album, or None (profile panel)
     rows = sql_select(queries.TOP_ALBUM, (username,))
     return rows[0] if rows else None
 
 
 def insert_seen(username, albums):
+    # records the shown albums as seen, so they aren't recommended again
     for album in albums:
         sql_execute(queries.INSERT_SEEN, (username, album['album_id'], datetime.now()))
 
 
 def insert_rating(username, album_id, rating):
+    # saves a rating given in the app (1 to 10)
     # TODO: allow the user to update an existing rating
     # (today ON CONFLICT DO NOTHING silently ignores the new rating)
     created_at = datetime.now()
@@ -127,24 +133,29 @@ def insert_rating(username, album_id, rating):
 
 
 def recommend_random(username, N=9):
+    # N random albums the user hasn't rated or seen
     query = queries.RECOMMEND_RANDOM.format(N=N)
     return sql_select(query, (username, username, username))
 
 def recommend_top_n(username, N=9):
+    # the N albums with the best RYM average (at least 5 reviews)
     query = queries.RECOMMEND_TOP_N.format(N=N)
     return sql_select(query, (username, username, username))
 
 def recommend_most_rated(username, N=9):
+    # the N most reviewed albums on RYM
     query = queries.RECOMMEND_MOST_RATED.format(N=N)
     return sql_select(query, (username, username, username))
 
 def recommend_balanced_profile(username, N=9):
+    # N albums by genre and artist affinity plus the album's rating (see queries.py)
     query = queries.RECOMMEND_BALANCED_PROFILE.format(N=N)
     # order: pref_genres username, pref_artists username, then the
     # final_select exclusions (ratings, seen, user_reviews)
     return sql_select(query, (username, username, username, username, username))
 
 def recommend_tunnel_vision(username, N=9):
+    # N albums matching both a genre and an artist the user reviewed, then popular ones
     query = queries.RECOMMEND_TUNNEL_VISION.format(N=N)
     # order: fav_genres username, fav_artists username, then the
     # tunnel_vision exclusions (seen, user_reviews, ratings), then the
@@ -211,6 +222,7 @@ def recommend_cascade(name):
 
 
 def reset_recent(username, cutoff_date='2026-09-01 23:59:59'):
+    # deletes what the user saw and rated in the app after the cutoff date
     sql_execute(queries.RESET_SEEN, (username, cutoff_date))
     sql_execute(queries.RESET_RATINGS, (username, cutoff_date))
 
@@ -229,6 +241,7 @@ DEFAULT_ALGORITHM = 'balanced'
 
 
 def recommend(username, algorithm=DEFAULT_ALGORITHM, N=9):
+    # recommends with the chosen algorithm and records the albums as seen
     recommend_fn = ALGORITHMS.get(algorithm, ALGORITHMS[DEFAULT_ALGORITHM])
     rec = recommend_fn(username, N)
 

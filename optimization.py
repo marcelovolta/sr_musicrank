@@ -38,6 +38,7 @@ class Evaluator:
     # Measures NDCG@K of a model trained on train against what the user
     # reviewed afterwards (validation or test)
     def __init__(self, train, test):
+        # the test albums of each user, and the fallback list (most reviewed albums)
         self.test = test.groupby('username')['album_id'].apply(set).to_dict()
         self.users = sorted(self.test)
         reviewed = train.groupby('username')['album_id'].apply(set).to_dict()
