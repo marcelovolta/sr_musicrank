@@ -75,8 +75,14 @@ def initialize_schema():
         for query in queries.MIGRATE_RATINGS_TO_STARS:
             cur.execute(query)
 
-    # user_reviews is static, so review_count/avg_rating are calculated once
-    # here rather than aggregated on every recommendation request
+    # every rated review, from RYM and from this app, as one view
+    for query in queries.CREATE_INDEXES_USER_REVIEWS:
+        cur.execute(query)
+    cur.execute(queries.DROP_VIEW_ALL_REVIEWS)
+    cur.execute(queries.CREATE_VIEW_ALL_REVIEWS)
+
+    # review_count/avg_rating per album, filled whole here (see also
+    # insert_rating and reset_recent)
     cur.execute(queries.CREATE_TABLE_ALBUM_STATS)
     cur.execute(queries.CLEAR_ALBUM_STATS)
     cur.execute(queries.POPULATE_ALBUM_STATS)
@@ -84,19 +90,9 @@ def initialize_schema():
     cur.execute(queries.DROP_VIEW_ALBUM_CATALOG)
     cur.execute(queries.CREATE_VIEW_ALBUM_CATALOG)
 
-    # per-user profile stats (top genres/artists, highest-rated album), same
-    # pre-calculate-once approach as album_stats
-    cur.execute(queries.CREATE_TABLE_USER_GENRE_STATS)
-    cur.execute(queries.CLEAR_USER_GENRE_STATS)
-    cur.execute(queries.POPULATE_USER_GENRE_STATS)
-
-    cur.execute(queries.CREATE_TABLE_USER_ARTIST_STATS)
-    cur.execute(queries.CLEAR_USER_ARTIST_STATS)
-    cur.execute(queries.POPULATE_USER_ARTIST_STATS)
-
-    cur.execute(queries.CREATE_TABLE_USER_TOP_ALBUM)
-    cur.execute(queries.CLEAR_USER_TOP_ALBUM)
-    cur.execute(queries.POPULATE_USER_TOP_ALBUM)
+    # the profile is now computed live from all_reviews
+    for query in queries.DROP_LEGACY_PROFILE_TABLES:
+        cur.execute(query)
 
     conn.commit()
     cur.close()
@@ -108,7 +104,7 @@ initialize_schema()
 
 def count_rated(username):
     # albums the user rated, in this app or on RYM (also decides the cascades' branch)
-    return sql_select(queries.COUNT_RATED, (username, username))
+    return sql_select(queries.COUNT_RATED, (username,))
 
 
 def user_exists(username):
@@ -121,17 +117,17 @@ def count_seen(username):
     return sql_select(queries.COUNT_SEEN, (username,))
 
 def top_genres(username):
-    # the user's 3 most reviewed primary genres (profile panel)
+    # the user's 3 most reviewed primary genres, RYM plus app (profile panel)
     return sql_select(queries.TOP_GENRES, (username,))
 
 
 def top_artists(username):
-    # the user's 3 most reviewed artists (profile panel)
+    # the user's 3 most reviewed artists, RYM plus app (profile panel)
     return sql_select(queries.TOP_ARTISTS, (username,))
 
 
 def top_album(username):
-    # the user's highest rated album, or None (profile panel)
+    # the user's highest rated album, RYM plus app, or None (profile panel)
     rows = sql_select(queries.TOP_ALBUM, (username,))
     return rows[0] if rows else None
 
@@ -193,6 +189,8 @@ def insert_rating(username, album_id, rating):
     # (today ON CONFLICT DO NOTHING silently ignores the new rating)
     created_at = datetime.now()
     sql_execute(queries.INSERT_RATING, (username, album_id, created_at, rating))
+    # the album's review count and average now include this rating
+    sql_execute(queries.REFRESH_ALBUM_STATS, (album_id, album_id))
 
 
 # What the score shown on each album means, per algorithm: every algorithm
@@ -223,33 +221,33 @@ def _with_score(rows, label):
 def recommend_random(username, N=9):
     # N random albums the user hasn't rated or seen
     query = queries.RECOMMEND_RANDOM.format(N=N)
-    return _with_score(sql_select(query, (username, username, username)), SCORE_LABELS['random'])
+    return _with_score(sql_select(query, (username, username)), SCORE_LABELS['random'])
 
 def recommend_top_n(username, N=9):
     # the N albums with the best RYM average (at least 5 reviews)
     query = queries.RECOMMEND_TOP_N.format(N=N)
-    return _with_score(sql_select(query, (username, username, username)), SCORE_LABELS['top_n'])
+    return _with_score(sql_select(query, (username, username)), SCORE_LABELS['top_n'])
 
 def recommend_most_rated(username, N=9):
     # the N most reviewed albums on RYM
     query = queries.RECOMMEND_MOST_RATED.format(N=N)
-    return _with_score(sql_select(query, (username, username, username)), SCORE_LABELS['most_rated'])
+    return _with_score(sql_select(query, (username, username)), SCORE_LABELS['most_rated'])
 
 def recommend_balanced_profile(username, N=9):
     # N albums by genre and artist affinity plus the album's rating (see queries.py)
     query = queries.RECOMMEND_BALANCED_PROFILE.format(N=N)
     # order: pref_genres username, pref_artists username, then the
-    # final_select exclusions (ratings, seen, user_reviews)
-    rows = sql_select(query, (username, username, username, username, username))
+    # final_select exclusions (all_reviews, seen)
+    rows = sql_select(query, (username,) * 4)
     return _with_score(rows, SCORE_LABELS['balanced'])
 
 def recommend_tunnel_vision(username, N=9):
     # N albums matching both a genre and an artist the user reviewed, then popular ones
     query = queries.RECOMMEND_TUNNEL_VISION.format(N=N)
     # order: fav_genres username, fav_artists username, then the
-    # tunnel_vision exclusions (seen, user_reviews, ratings), then the
-    # popular_albums fallback's own exclusions (ratings, seen, user_reviews)
-    rows = sql_select(query, (username,) * 8)
+    # tunnel_vision exclusions (all_reviews, seen), then the popular_albums
+    # fallback's own exclusions (all_reviews, seen)
+    rows = sql_select(query, (username,) * 6)
     # the fallback albums are scored by popularity, not by affinity
     return [{**dict(row), 'score_label': SCORE_LABELS['tunnel_vision_fallback' if row['fallback'] else 'tunnel_vision']}
             for row in rows]
@@ -258,7 +256,7 @@ def _recommend_from_ranking(username, N, ranking, label, transform=float):
     # the first N albums of a ranking of (album_id, score) pairs, best first,
     # leaving out the ones the user already rated or has seen; each album
     # keeps its score (through transform) and what it means (label)
-    excluded = {r['album_id'] for r in sql_select(queries.EXCLUDED_ALBUMS, (username,) * 3)}
+    excluded = {r['album_id'] for r in sql_select(queries.EXCLUDED_ALBUMS, (username,) * 2)}
     top = list(islice(((album_id, score) for album_id, score in ranking if album_id not in excluded), N))
     if not top:
         return []
@@ -332,6 +330,11 @@ def reset_recent(username, cutoff_date='2026-09-01 23:59:59'):
     # deletes what the user saw and rated in the app after the cutoff date
     sql_execute(queries.RESET_SEEN, (username, cutoff_date))
     sql_execute(queries.RESET_RATINGS, (username, cutoff_date))
+    # the deleted ratings no longer count in their albums' stats: recalculated
+    # whole, in one transaction so no request sees album_stats empty
+    with sqlite3.connect(DATABASE_FILE) as conn:
+        conn.execute(queries.CLEAR_ALBUM_STATS)
+        conn.execute(queries.POPULATE_ALBUM_STATS)
 
 
 ALGORITHMS = {

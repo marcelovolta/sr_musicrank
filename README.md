@@ -90,7 +90,10 @@ They aren't trained: they query the database directly.
 | `balanced` | 0.4 × genre affinity + 0.4 × artist affinity + 0.2 × corrected album rating. |
 | `tunnel_vision` | Albums matching both a genre **and** an artist the user reviewed; if they aren't enough, popular ones. |
 
-All of them leave out what the user already rated or saw.
+All of them leave out what the user already rated or saw. They read the reviews from the
+`all_reviews` view: RYM's plus this app's ratings as one table (the app rating wins when a user
+rated an album in both places), so a rating given in the app counts right away. The profile
+panel and the albums' review count and average come from the same view.
 
 ## Trained models (`models.py`)
 
