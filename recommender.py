@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from itertools import islice
 
+import dataset
 import ensemble
 import models
 import queries
@@ -98,6 +99,11 @@ def count_rated(username):
     return sql_select(queries.COUNT_RATED, (username, username))
 
 
+def user_exists(username):
+    # whether the user has RYM reviews or anything rated or seen in this app
+    return bool(sql_select(queries.USER_EXISTS, (username,) * 3)[0]['user_exists'])
+
+
 def count_seen(username):
     # albums this app already showed the user
     return sql_select(queries.COUNT_SEEN, (username,))
@@ -116,6 +122,51 @@ def top_album(username):
     # the user's highest rated album, or None (profile panel)
     rows = sql_select(queries.TOP_ALBUM, (username,))
     return rows[0] if rows else None
+
+
+def _matrix_stats(label, users, albums, interactions):
+    # size of a users x albums matrix and its coverage (share of filled cells, in %)
+    cells = users * albums
+    return {'label': label, 'users': users, 'albums': albums, 'interactions': interactions,
+            'coverage': 100 * interactions / cells if cells else 0.0}
+
+
+def database_stats():
+    # Login screen stats. Unfiltered: every review with a rating (RYM plus this
+    # app's, like dataset.read_reviews), the base of the profile algorithms.
+    # Filtered: the users with at least dataset.MIN_USER_FINAL reviews, the
+    # universe of the final models; then each model, with its own min_album
+    # (album filter) as it was trained, read from its .pkl. Albums are the ones
+    # with at least one review, not the whole catalog.
+    df = dataset.read_reviews(DATABASE_FILE)
+    filtered = dataset.universe(df, dataset.MIN_USER_FINAL)
+    base = [
+        _matrix_stats('Unfiltered (profile algorithms)', df['username'].nunique(), df['album_id'].nunique(), len(df)),
+        _matrix_stats(f'Filtered (users with {dataset.MIN_USER_FINAL}+ reviews, models)',
+                      filtered['username'].nunique(), filtered['album_id'].nunique(), len(filtered)),
+    ]
+    per_model = []
+    for name in models.NAMES:
+        try:
+            m = models.model(name)
+        except FileNotFoundError:
+            continue
+        per_model.append(_matrix_stats(f"{name} (min_album {m['params']['min_album']})",
+                                       len(m['user_index']), len(m['album_ids']), m['optimization']['reviews']))
+    return base, per_model
+
+
+def top_reviewers(n=10):
+    # the n users with the most reviews with a rating (RYM plus app, like
+    # dataset.read_reviews), with their average rating over all of them
+    # (0.5 to 5 stars) and their 3 most reviewed genres and artists
+    df = dataset.read_reviews(DATABASE_FILE)
+    per_user = df.groupby('username')['rating'].agg(['size', 'mean']).reset_index()
+    top = per_user.sort_values(['size', 'username'], ascending=[False, True]).head(n)
+    return [{'username': r.username, 'review_count': int(r.size), 'avg_rating': float(r.mean),
+             'top_genres': [g['genre_name'] for g in top_genres(r.username)],
+             'top_artists': [a['artist_name'] for a in top_artists(r.username)]}
+            for r in top.itertuples(index=False)]
 
 
 def insert_seen(username, albums):

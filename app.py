@@ -3,10 +3,19 @@ import recommender
 
 app = Flask(__name__)
 
+def render_login(new_username=None, algorithm=None):
+    # login screen with the database stats and the top reviewers; with
+    # new_username it warns that the user doesn't exist and will be created
+    base_stats, model_stats = recommender.database_stats()
+    return render_template('login.html', base_stats=base_stats, model_stats=model_stats,
+                           top_reviewers=recommender.top_reviewers(),
+                           new_username=new_username, algorithm=algorithm)
+
+
 @app.get('/')
 def get_index():
     # login screen: username and algorithm
-    return render_template('login.html')
+    return render_login()
 
 @app.post('/')
 def post_index():
@@ -14,8 +23,11 @@ def post_index():
     username = request.form.get('username')
     algorithm = request.form.get('algorithm', recommender.DEFAULT_ALGORITHM)
     if not username:
-        return render_template('login.html')
-    # TODO: validate that username exists in the database
+        return render_login()
+    # an unknown user is warned first; logging in again with the same name
+    # (confirm_new) creates it: it starts to exist with what it sees and rates
+    if not recommender.user_exists(username) and request.form.get('confirm_new') != username:
+        return render_login(new_username=username, algorithm=algorithm)
     return redirect(f'/recommend/{username}/{algorithm}')
 
 

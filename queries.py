@@ -105,6 +105,14 @@ COUNT_RATED = """
     )
 """
 
+# a user exists if they have anything in the database: RYM reviews, or
+# ratings or seen albums in this app (there's no users table)
+USER_EXISTS = """
+    SELECT EXISTS (SELECT 1 FROM user_reviews WHERE username = ?)
+        OR EXISTS (SELECT 1 FROM ratings WHERE username = ?)
+        OR EXISTS (SELECT 1 FROM seen WHERE username = ?) AS user_exists
+"""
+
 COUNT_SEEN = """
     SELECT COUNT(*) AS seen_count
     FROM seen

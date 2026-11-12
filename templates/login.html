@@ -13,9 +13,16 @@
         <div class="flex mb-4">
             <label>
                 Username:
-                <input type="text" name="username" minlength="3" maxlength="30" required class="p-1 border rounded">
+                <input type="text" name="username" minlength="3" maxlength="30" required class="p-1 border rounded"
+                       value="{{ new_username or '' }}">
             </label>
         </div>
+        {% if new_username %}
+        <input type="hidden" name="confirm_new" value="{{ new_username }}">
+        <div class="mb-4 p-2 border border-amber-400 bg-amber-50 text-amber-800 text-sm rounded">
+            User <strong>{{ new_username }}</strong> doesn't exist. Press Log In again to create it.
+        </div>
+        {% endif %}
         <div class="mb-4">
             <label>
                 Recommendation algorithm:
@@ -48,6 +55,78 @@
             </button>
         </div>
     </form>
+
+    <section class="max-w-4xl mx-auto mt-10">
+        <h2 class="mb-2 text-xl font-bold">Database</h2>
+        <table class="w-full text-sm border">
+            <thead class="bg-neutral-100">
+                <tr>
+                    <th class="text-left p-2">Base</th>
+                    <th class="text-right p-2">Users</th>
+                    <th class="text-right p-2">Albums</th>
+                    <th class="text-right p-2">Interactions</th>
+                    <th class="text-right p-2">Coverage</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in base_stats %}
+                <tr class="border-t font-semibold">
+                    <td class="p-2">{{ s.label }}</td>
+                    <td class="text-right p-2">{{ "{:,}".format(s.users) }}</td>
+                    <td class="text-right p-2">{{ "{:,}".format(s.albums) }}</td>
+                    <td class="text-right p-2">{{ "{:,}".format(s.interactions) }}</td>
+                    <td class="text-right p-2">{{ "%.3f"|format(s.coverage) }}%</td>
+                </tr>
+                {% endfor %}
+                {% for s in model_stats %}
+                <tr class="border-t text-neutral-600">
+                    <td class="p-2 pl-6">{{ s.label }}</td>
+                    <td class="text-right p-2">{{ "{:,}".format(s.users) }}</td>
+                    <td class="text-right p-2">{{ "{:,}".format(s.albums) }}</td>
+                    <td class="text-right p-2">{{ "{:,}".format(s.interactions) }}</td>
+                    <td class="text-right p-2">{{ "%.3f"|format(s.coverage) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="text-xs text-neutral-500 mt-1">
+            Interactions: reviews with a rating (RYM plus this app's). Albums: those with at least one review.
+            Coverage = 100 &times; interactions / (users &times; albums). The indented rows are each trained model,
+            as it was trained (each drops the albums with fewer than min_album reviews).
+        </p>
+    </section>
+
+    <section class="max-w-4xl mx-auto mt-10 mb-10">
+        <h2 class="mb-2 text-xl font-bold">Top 10 reviewers</h2>
+        <table class="w-full text-sm border">
+            <thead class="bg-neutral-100">
+                <tr>
+                    <th class="text-left p-2">User</th>
+                    <th class="text-right p-2">Reviews</th>
+                    <th class="text-right p-2">Avg rating</th>
+                    <th class="text-left p-2">Top genres</th>
+                    <th class="text-left p-2">Top artists</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in top_reviewers %}
+                <tr class="border-t align-top">
+                    <td class="p-2">
+                        <a href="/recommend/{{ u.username|urlencode }}/balanced" data-username="{{ u.username|urlencode }}"
+                           class="reviewer-link text-teal-700 hover:underline">{{ u.username }}</a>
+                    </td>
+                    <td class="text-right p-2">{{ u.review_count }}</td>
+                    <td class="text-right p-2">{{ "%.2f"|format(u.avg_rating) }}</td>
+                    <td class="p-2">{{ u.top_genres|join(', ') }}</td>
+                    <td class="p-2">{{ u.top_artists|join(', ') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="text-xs text-neutral-500 mt-1">
+            Average rating over all of the user's reviews (0.5 to 5 stars). The links use the algorithm selected above.
+        </p>
+    </section>
     <script>
         const algorithmDescriptions = {
             balanced: "Personalized picks based on your own genre and artist ratings on RYM, weighted against how well-reviewed each album is overall.",
@@ -73,8 +152,16 @@
         function updateAlgorithmDescription() {
             const select = document.getElementById('algorithm');
             document.getElementById('algorithm-description').textContent = algorithmDescriptions[select.value] || '';
+            // the top reviewers' links go to the selected algorithm
+            for (const link of document.querySelectorAll('.reviewer-link')) {
+                link.href = `/recommend/${link.dataset.username}/${select.value}`;
+            }
         }
 
+        {% if algorithm %}
+        // keeps the algorithm chosen before the new-user warning
+        document.getElementById('algorithm').value = {{ algorithm|tojson }};
+        {% endif %}
         updateAlgorithmDescription();
     </script>
 </body>
