@@ -24,6 +24,11 @@
                     <option value="{{ value }}" {% if value == algorithm %}selected{% endif %}>{{ name }}</option>
                     {% endfor %}
                 </select>
+                {% if retrain_models %}
+                <button type="button" onclick="startRetrain()"
+                        title="Trains again: {{ retrain_models|join(', ') }}"
+                        class="bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs px-2 py-1 rounded cursor-pointer">retrain model</button>
+                {% endif %}
                 - <a href="/reset/{{ username }}"
                     class="bg-teal-400 text-white font-semibold text-xs px-2 py-1 mt-2 rounded cursor-pointer">reset</a>
                 - <a href="/"
@@ -109,6 +114,68 @@
         </div>
     </form>
 
+    {# shown while the model retrains; it can't be closed until it's done #}
+    <dialog id="retrain-modal" class="modal">
+        <div class="modal-box">
+            <h3 class="text-lg font-bold">Retraining the model</h3>
+            <div class="flex items-center gap-3 mt-4">
+                <span id="retrain-spinner" class="loading loading-spinner loading-md"></span>
+                <p id="retrain-message">Starting...</p>
+            </div>
+            <p class="text-xs text-neutral-500 mt-3">
+                With every review so far, including the ratings chosen on this page, and the hyperparameters already
+                chosen. The recommendations reload when it's done.
+            </p>
+            <div id="retrain-close" class="modal-action hidden">
+                <button type="button" class="border px-3 py-1 rounded" onclick="document.getElementById('retrain-modal').close()">Close</button>
+            </div>
+        </div>
+    </dialog>
+
+    <script>
+        const retrainModal = document.getElementById('retrain-modal');
+        let retrainRunning = false;
+        // Esc doesn't close it while training
+        retrainModal.addEventListener('cancel', (event) => { if (retrainRunning) event.preventDefault(); });
+
+        function retrainError(text) {
+            retrainRunning = false;
+            document.getElementById('retrain-spinner').classList.add('hidden');
+            document.getElementById('retrain-message').textContent = text;
+            document.getElementById('retrain-close').classList.remove('hidden');
+        }
+
+        async function startRetrain() {
+            const username = {{ username|tojson }};
+            const algorithm = {{ algorithm|tojson }};
+            retrainRunning = true;
+            retrainModal.showModal();
+            try {
+                // sends the ratings chosen on the page along, so they're saved first
+                const form = new FormData(document.getElementById('recommendations-form'));
+                const response = await fetch(`/retrain/${encodeURIComponent(username)}/${encodeURIComponent(algorithm)}`,
+                                             {method: 'POST', body: form});
+                let job = await response.json();
+                if (job.state === 'running' && job.algorithm !== algorithm) {
+                    return retrainError(`Another model (${job.algorithm}) is being retrained. Try again in a moment.`);
+                }
+                while (job.state === 'running') {
+                    const n = job.models.length;
+                    document.getElementById('retrain-message').textContent =
+                        n > 1 ? `Training ${job.current} (${job.done.length + 1} of ${n})...` : `Training ${job.current}...`;
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                    job = await (await fetch('/retrain/status')).json();
+                }
+                if (job.state !== 'done') {
+                    return retrainError(`The retraining failed: ${job.error || job.state}`);
+                }
+                document.getElementById('retrain-message').textContent = 'Done. Loading the new recommendations...';
+                window.location.href = `/recommend/${encodeURIComponent(username)}/${encodeURIComponent(algorithm)}`;
+            } catch (error) {
+                retrainError(`The retraining failed: ${error}`);
+            }
+        }
+    </script>
 </body>
 
 </html>

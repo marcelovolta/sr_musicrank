@@ -18,6 +18,7 @@ The detailed results are in [`reports/`](reports/summary.md), and a summary of t
 | `optimization.py` | Evaluation (NDCG@10), Optuna, final training, learning curves and reports. |
 | `ensemble.py` | The LightGBM ensemble (and the simple average) over the models' predictions. |
 | `pipeline.py` | The whole process, to run again when the database changes. |
+| `retrain.py` | Retraining from the app ("retrain model" button): the final model again with the current reviews and the hyperparameters already chosen, in the background. |
 | `templates/` | App pages. |
 | `models/` | The trained models (`.pkl`), not versioned. |
 | `reports/` | Markdown reports. |
@@ -198,7 +199,9 @@ NDCG@10 on test, over the 1,076 users of the universe (details in
 ## Known limitations
 
 - The models are trained with a copy of the database: what's rated in the app afterwards isn't
-  seen until `pipeline.py` runs again.
+  seen until `pipeline.py` runs again, or until the model is retrained with the "retrain model"
+  button (which keeps the hyperparameters; the ensemble's LightGBM isn't retrained, only its
+  base models).
 - Users with fewer than 5 reviews get no personalized recommendations from the models: in the
   cascades `tunnel_vision` serves them.
 - `recommender.py` rebuilds the stats tables of `data/mergenres.db` every time it's imported.

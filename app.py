@@ -1,5 +1,6 @@
-from flask import Flask, request, render_template, redirect
+from flask import Flask, request, render_template, redirect, jsonify
 import recommender
+import retrain
 
 app = Flask(__name__)
 
@@ -51,21 +52,42 @@ def get_recommend(username, algorithm):
     top_artists = recommender.top_artists(username)
     top_album = recommender.top_album(username)
     return render_template('recommendations.html', seen_count=seen_count, rated_count=rated_count, recommended_albums=recommended_albums, username=username, algorithm=algorithm, top_genres=top_genres, top_artists=top_artists, top_album=top_album,
-                           algorithm_names=recommender.ALGORITHM_NAMES)
+                           algorithm_names=recommender.ALGORITHM_NAMES,
+                           retrain_models=retrain.models_for(algorithm))
+
+
+def save_ratings(username, form):
+    # saves the ratings chosen in the recommendations form (stars, 0.5 to 5;
+    # 0 = not rated)
+    for album_id in form.keys():
+        if album_id == 'algorithm':  # the algorithm selector, not a rating
+            continue
+        rating = float(form.get(album_id, 0))
+        if rating > 0:
+            print(f'User {username} rated album {album_id} with {rating} stars')
+            recommender.insert_rating(username, album_id, rating)
 
 
 @app.post('/recommend/<username>/<algorithm>')
 def post_recommend(username, algorithm):
     # save the rated items, then recommend again
     # seen items are saved in get_recommend, since that's where they're shown
-    for album_id in request.form.keys():
-        if album_id == 'algorithm':  # the algorithm selector, not a rating
-            continue
-        rating = float(request.form.get(album_id, 0))  # stars, 0.5 to 5
-        print(f'User {username} rated album {album_id} with {rating} stars')
-        if rating > 0: # it was rated, so we save it in the ratings table
-            recommender.insert_rating(username, album_id, rating)
+    save_ratings(username, request.form)
 
     # the algorithm selector submits the form with the new one
     algorithm = request.form.get('algorithm', algorithm)
     return redirect(f'/recommend/{username}/{recommender.valid_algorithm(algorithm)}')
+
+
+@app.post('/retrain/<username>/<algorithm>')
+def post_retrain(username, algorithm):
+    # saves the ratings chosen on the page (so the new model learns them) and
+    # starts retraining the algorithm's models in the background
+    save_ratings(username, request.form)
+    return jsonify(retrain.start(algorithm))
+
+
+@app.get('/retrain/status')
+def get_retrain_status():
+    # state of the retraining, asked by the page until it's done
+    return jsonify(retrain.status())
