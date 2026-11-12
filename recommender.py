@@ -1,3 +1,4 @@
+import math
 import sqlite3
 import os
 from datetime import datetime
@@ -194,27 +195,53 @@ def insert_rating(username, album_id, rating):
     sql_execute(queries.INSERT_RATING, (username, album_id, created_at, rating))
 
 
+# What the score shown on each album means, per algorithm: every algorithm
+# orders by its own score, so the scales aren't comparable between them
+SCORE_LABELS = {
+    'random': None,
+    'top_n': 'average rating',
+    'most_rated': 'reviews on RYM',
+    'balanced': 'profile score: 0.4 genre + 0.4 artist + 0.2 album rating',
+    'tunnel_vision': 'genre + artist affinity',
+    'tunnel_vision_fallback': 'popularity: 0.8 avg rating + 0.2 reviews',
+    'baseline': 'album bias above the average',
+    'svd': 'SVD score: album bias + user-album factors',
+    'ease': 'EASE score: weights from your reviewed albums',
+    'two_towers': 'user-album similarity',
+    'big_tower': 'probability of reviewing it',
+    'ensemble': 'LightGBM ranking score (relative)',
+    'average': 'average of the standardized model scores',
+    'unknown_user': "reviews in the model's training data (the model doesn't know you)",
+}
+
+
+def _with_score(rows, label):
+    # the albums as dicts, each with its score and what that score means
+    return [{**dict(row), 'score_label': label} for row in rows]
+
+
 def recommend_random(username, N=9):
     # N random albums the user hasn't rated or seen
     query = queries.RECOMMEND_RANDOM.format(N=N)
-    return sql_select(query, (username, username, username))
+    return _with_score(sql_select(query, (username, username, username)), SCORE_LABELS['random'])
 
 def recommend_top_n(username, N=9):
     # the N albums with the best RYM average (at least 5 reviews)
     query = queries.RECOMMEND_TOP_N.format(N=N)
-    return sql_select(query, (username, username, username))
+    return _with_score(sql_select(query, (username, username, username)), SCORE_LABELS['top_n'])
 
 def recommend_most_rated(username, N=9):
     # the N most reviewed albums on RYM
     query = queries.RECOMMEND_MOST_RATED.format(N=N)
-    return sql_select(query, (username, username, username))
+    return _with_score(sql_select(query, (username, username, username)), SCORE_LABELS['most_rated'])
 
 def recommend_balanced_profile(username, N=9):
     # N albums by genre and artist affinity plus the album's rating (see queries.py)
     query = queries.RECOMMEND_BALANCED_PROFILE.format(N=N)
     # order: pref_genres username, pref_artists username, then the
     # final_select exclusions (ratings, seen, user_reviews)
-    return sql_select(query, (username, username, username, username, username))
+    rows = sql_select(query, (username, username, username, username, username))
+    return _with_score(rows, SCORE_LABELS['balanced'])
 
 def recommend_tunnel_vision(username, N=9):
     # N albums matching both a genre and an artist the user reviewed, then popular ones
@@ -222,20 +249,31 @@ def recommend_tunnel_vision(username, N=9):
     # order: fav_genres username, fav_artists username, then the
     # tunnel_vision exclusions (seen, user_reviews, ratings), then the
     # popular_albums fallback's own exclusions (ratings, seen, user_reviews)
-    return sql_select(query, (username,) * 8)
+    rows = sql_select(query, (username,) * 8)
+    # the fallback albums are scored by popularity, not by affinity
+    return [{**dict(row), 'score_label': SCORE_LABELS['tunnel_vision_fallback' if row['fallback'] else 'tunnel_vision']}
+            for row in rows]
 
-def _recommend_from_ranking(username, N, ranking):
+def _recommend_from_ranking(username, N, ranking, label, transform=float):
     # the first N albums of a ranking of (album_id, score) pairs, best first,
-    # leaving out the ones the user already rated or has seen
+    # leaving out the ones the user already rated or has seen; each album
+    # keeps its score (through transform) and what it means (label)
     excluded = {r['album_id'] for r in sql_select(queries.EXCLUDED_ALBUMS, (username,) * 3)}
-    top = list(islice((album_id for album_id, _ in ranking if album_id not in excluded), N))
+    top = list(islice(((album_id, score) for album_id, score in ranking if album_id not in excluded), N))
     if not top:
         return []
 
     query = queries.CATALOG_ALBUMS.format(placeholders=', '.join('?' * len(top)))
-    albums = sql_select(query, [int(a) for a in top])
-    position = {album_id: i for i, album_id in enumerate(top)}
-    return sorted(albums, key=lambda r: position[r['album_id']])
+    albums = sql_select(query, [int(a) for a, _ in top])
+    score = {int(a): transform(s) for a, s in top}
+    position = {int(a): i for i, (a, _) in enumerate(top)}
+    return sorted(({**dict(r), 'score': score[r['album_id']], 'score_label': label} for r in albums),
+                  key=lambda r: position[r['album_id']])
+
+
+def _sigmoid(logit):
+    # big_tower's score is a logit: as a probability it's easier to read
+    return 1 / (1 + math.exp(-float(logit)))
 
 
 MODEL_NAMES = (*models.NAMES, 'ensemble')
@@ -255,15 +293,20 @@ def _knows_user(name, username):
 def recommend_model(name):
     # recommender with one of the trained models (models.py or ensemble.py)
     def recommend_fn(username, N=9):
-        # the first N of the model's ranking, without what was already rated or seen
-        return _recommend_from_ranking(username, N, _ranking(name, username))
+        # the first N of the model's ranking, without what was already rated or
+        # seen; to a user it doesn't know, the model gives its most reviewed albums
+        if not _knows_user(name, username):
+            return _recommend_from_ranking(username, N, _ranking(name, username), SCORE_LABELS['unknown_user'])
+        transform = _sigmoid if name == 'big_tower' else float
+        return _recommend_from_ranking(username, N, _ranking(name, username), SCORE_LABELS[name], transform)
     return recommend_fn
 
 
 def recommend_average(username, N=9):
     # the ensemble's candidates ordered by the simple average of the
     # standardized scores, instead of LightGBM
-    return _recommend_from_ranking(username, N, ensemble.ranking(username, average=True))
+    label = SCORE_LABELS['average' if ensemble.knows_user(username) else 'unknown_user']
+    return _recommend_from_ranking(username, N, ensemble.ranking(username, average=True), label)
 
 
 def recommend_cascade(name):
@@ -274,12 +317,14 @@ def recommend_cascade(name):
     # the model
     model_fn = recommend_model(name)
     def recommend_fn(username, N=9):
-        # the cascade for one user
+        # the cascade for one user; each album says which branch recommended it
         if count_rated(username)[0]['rated_count'] <= COLD_START:
-            return recommend_top_n(username, N)
-        if not _knows_user(name, username):
-            return recommend_tunnel_vision(username, N)
-        return model_fn(username, N)
+            branch, albums = 'top_n', recommend_top_n(username, N)
+        elif not _knows_user(name, username):
+            branch, albums = 'tunnel_vision', recommend_tunnel_vision(username, N)
+        else:
+            branch, albums = name, model_fn(username, N)
+        return [{**album, 'via': branch} for album in albums]
     return recommend_fn
 
 
@@ -301,10 +346,38 @@ ALGORITHMS = {
 }
 DEFAULT_ALGORITHM = 'balanced'
 
+# the algorithms in the order and with the names the screens show them
+ALGORITHM_NAMES = {
+    'balanced': 'Balanced (personalized)',
+    'tunnel_vision': 'Tunnel vision (personalized)',
+    'top_n': 'Top rated',
+    'most_rated': 'Most reviewed',
+    'random': 'Random',
+    'baseline': 'Baseline (Surprise)',
+    'svd': 'SVD (Surprise)',
+    'ease': 'EASE',
+    'two_towers': 'Two towers (neural network)',
+    'big_tower': 'One big tower (neural network)',
+    'ensemble': 'Ensemble (LightGBM)',
+    'average': 'Model average',
+    'cascade_baseline': 'Cascade baseline',
+    'cascade_svd': 'Cascade SVD',
+    'cascade_ease': 'Cascade EASE',
+    'cascade_two_towers': 'Cascade two towers',
+    'cascade_big_tower': 'Cascade big tower',
+    'cascade_ensemble': 'Cascade ensemble',
+}
+assert ALGORITHM_NAMES.keys() == ALGORITHMS.keys()
+
+
+def valid_algorithm(algorithm):
+    # the algorithm if it exists, otherwise the default one
+    return algorithm if algorithm in ALGORITHMS else DEFAULT_ALGORITHM
+
 
 def recommend(username, algorithm=DEFAULT_ALGORITHM, N=9):
     # recommends with the chosen algorithm and records the albums as seen
-    recommend_fn = ALGORITHMS.get(algorithm, ALGORITHMS[DEFAULT_ALGORITHM])
+    recommend_fn = ALGORITHMS[valid_algorithm(algorithm)]
     rec = recommend_fn(username, N)
 
     insert_seen(username, rec)

@@ -138,7 +138,7 @@ INSERT_RATING = """
 """
 
 RECOMMEND_RANDOM = """
-    SELECT *
+    SELECT *, NULL AS score
     FROM album_catalog
     WHERE album_id NOT IN (SELECT album_id FROM ratings WHERE username = ? AND COALESCE(rating, 0) > 0)
     AND album_id NOT IN (SELECT album_id FROM seen WHERE username = ?)
@@ -163,7 +163,7 @@ RECOMMEND_TOP_N = """
     ORDER BY avg_rating DESC
     LIMIT {N}
 )
-SELECT album_catalog.* FROM album_catalog
+SELECT album_catalog.*, t1.avg_rating AS score FROM album_catalog
 JOIN t1 ON t1.album_id = album_catalog.album_id
 ORDER BY t1.avg_rating DESC
 """
@@ -179,7 +179,7 @@ RECOMMEND_MOST_RATED = """
     ORDER BY rating_count DESC
     LIMIT {N}
 )
-SELECT album_catalog.* FROM album_catalog
+SELECT album_catalog.*, t1.rating_count AS score FROM album_catalog
 JOIN t1 ON t1.album_id = album_catalog.album_id
 ORDER BY t1.rating_count DESC
 """
@@ -402,7 +402,7 @@ WHERE fog.album_id NOT IN (SELECT album_id FROM ratings WHERE username = ? AND C
 ORDER BY global_rating DESC, fog.album_id
 LIMIT {N}
 )
-SELECT album_catalog.* FROM album_catalog
+SELECT album_catalog.*, final_select.global_rating AS score FROM album_catalog
 JOIN final_select ON final_select.album_id = album_catalog.album_id
 ORDER BY final_select.global_rating DESC, final_select.album_id
 """
@@ -514,7 +514,9 @@ from popular_albums
 )
 
 select
-    ac.*
+    ac.*,
+    ps.final_rating as score,
+    ps.sorting as fallback  -- 1: from the popular albums fallback
 from pre_selection as ps
 inner join album_catalog as ac
 on ps.album_id = ac.album_id

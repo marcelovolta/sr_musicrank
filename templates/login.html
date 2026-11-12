@@ -27,24 +27,9 @@
             <label>
                 Recommendation algorithm:
                 <select name="algorithm" id="algorithm" class="p-1 border rounded" onchange="updateAlgorithmDescription()">
-                    <option value="balanced" selected>Balanced (personalized)</option>
-                    <option value="tunnel_vision">Tunnel vision (personalized)</option>
-                    <option value="top_n">Top rated</option>
-                    <option value="most_rated">Most reviewed</option>
-                    <option value="random">Random</option>
-                    <option value="baseline">Baseline (Surprise)</option>
-                    <option value="svd">SVD (Surprise)</option>
-                    <option value="ease">EASE</option>
-                    <option value="two_towers">Two towers (neural network)</option>
-                    <option value="big_tower">One big tower (neural network)</option>
-                    <option value="ensemble">Ensemble (LightGBM)</option>
-                    <option value="average">Model average</option>
-                    <option value="cascade_baseline">Cascade baseline</option>
-                    <option value="cascade_svd">Cascade SVD</option>
-                    <option value="cascade_ease">Cascade EASE</option>
-                    <option value="cascade_two_towers">Cascade two towers</option>
-                    <option value="cascade_big_tower">Cascade big tower</option>
-                    <option value="cascade_ensemble">Cascade ensemble</option>
+                    {% for value, name in algorithm_names.items() %}
+                    <option value="{{ value }}">{{ name }}</option>
+                    {% endfor %}
                 </select>
             </label>
             <p id="algorithm-description" class="text-xs text-neutral-500 mt-1"></p>

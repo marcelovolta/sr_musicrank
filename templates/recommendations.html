@@ -16,7 +16,15 @@
     <div class="flex justify-between">
         <h1 class="mb-4 text-lg font-bold">Recommendations for {{ username }}</h1>
         <div>
-            <small>{{ seen_count }} seen, {{ rated_count }} rated, {{ algorithm }} algorithm - <a href="/reset/{{ username }}/{{ algorithm }}"
+            <small>{{ seen_count }} seen, {{ rated_count }} rated -
+                <label for="algorithm">algorithm:</label>
+                <select id="algorithm" name="algorithm" form="recommendations-form" onchange="this.form.submit()"
+                        class="px-2 py-0.5 text-xs border rounded">
+                    {% for value, name in algorithm_names.items() %}
+                    <option value="{{ value }}" {% if value == algorithm %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+                - <a href="/reset/{{ username }}"
                     class="bg-teal-400 text-white font-semibold text-xs px-2 py-1 mt-2 rounded cursor-pointer">reset</a>
                 - <a href="/"
                     class="bg-neutral-400 text-white font-semibold text-xs px-2 py-1 mt-2 rounded cursor-pointer">log out</a>
@@ -39,7 +47,9 @@
         </div>
     </div>
 
-    <form method="post" action="/recommend/{{ username }}/{{ algorithm }}">
+    {# the algorithm selector belongs to this form: changing it saves the
+       ratings chosen so far and recommends with the new algorithm #}
+    <form id="recommendations-form" method="post" action="/recommend/{{ username }}/{{ algorithm }}">
         <div class="grid grid-cols-3 gap-4">
             {% for album in recommended_albums %}
             <div class="card card-side bg-base-100 shadow-sm border bg-base-100">
@@ -62,6 +72,14 @@
                     {% endif %}
                     <span class="text-xs text-neutral-500">
                         Reviewed {{ album.review_count }} time{{ 's' if album.review_count != 1 else '' }}{% if album.avg_rating is not none %} - Avg. Rating: {{ '%.2f'|format(album.avg_rating) }}{% endif %}
+                    </span>
+                    <span class="text-xs font-semibold text-teal-700">
+                        {% if album.score is not none %}
+                        Inferred Score: {{ '%.3f'|format(album.score) }}
+                        <span class="font-normal text-neutral-500">({{ album.score_label }}{% if album.via %}; via {{ album.via }}{% endif %})</span>
+                        {% else %}
+                        No inferred score (random{% if album.via %}; via {{ album.via }}{% endif %})
+                        {% endif %}
                     </span>
                     {% if album.descriptors %}
                     <span class="text-xs">{{ album.descriptors|truncate(400) }}</span>
@@ -90,6 +108,7 @@
                 value="More recommendations">
         </div>
     </form>
+
 </body>
 
 </html>
