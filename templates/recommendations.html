@@ -73,16 +73,10 @@
                             <label for="{{album.album_id}}" class="flex-none mr-2">My rating:</label>
                             <select name="{{album.album_id}}" class="px-4 py-1 text-sm border rounded ">
                                 <option value="0" selected></option>
-                                <option value="1">1</option>
-                                <option value="2">2</option>
-                                <option value="3">3</option>
-                                <option value="4">4</option>
-                                <option value="5">5</option>
-                                <option value="6">6</option>
-                                <option value="7">7</option>
-                                <option value="8">8</option>
-                                <option value="9">9</option>
-                                <option value="10">10</option>
+                                {# stars from 0.5 to 5 in steps of 0.5, sent and stored as is #}
+                                {% for half_stars in range(1, 11) %}
+                                <option value="{{ half_stars / 2 }}">{{ '%.1f'|format(half_stars / 2) }}</option>
+                                {% endfor %}
                             </select>
                         </div>
                     </div>

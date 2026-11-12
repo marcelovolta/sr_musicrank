@@ -38,7 +38,7 @@ Optuna, LightGBM and matplotlib.
 
 ## Data
 
-- Reviews with a rating: RYM's (0.5 to 5 stars) plus this app's own ratings (1 to 10, halved;
+- Reviews with a rating: RYM's (0.5 to 5 stars) plus this app's own ratings (also 0.5 to 5 stars;
   when a user rated an album in both places, the app rating wins).
 - **Chronological order per user**, by review date; same-day ties by insertion order.
 - **The data is sparse:** 62 thousand reviews from 17 thousand users, 3.7 per user on average.

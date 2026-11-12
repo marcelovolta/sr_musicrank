@@ -55,8 +55,8 @@ def post_recommend(username, algorithm):
     # save the rated items, then recommend again
     # seen items are saved in get_recommend, since that's where they're shown
     for album_id in request.form.keys():
-        rating = int(request.form.get(album_id, 0))
-        print(f'User {username} rated album {album_id} with {rating}')
+        rating = float(request.form.get(album_id, 0))  # stars, 0.5 to 5
+        print(f'User {username} rated album {album_id} with {rating} stars')
         if rating > 0: # it was rated, so we save it in the ratings table
             recommender.insert_rating(username, album_id, rating)
 

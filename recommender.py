@@ -37,6 +37,12 @@ def sql_execute(query, params=()):
     conn.close()
 
 
+def _column_type(cur, table, column):
+    # declared type of a column (upper case), or None if it doesn't exist
+    cur.execute(f"PRAGMA table_info({table})")
+    return next((row[2].upper() for row in cur.fetchall() if row[1] == column), None)
+
+
 def _has_column(cur, table, column):
     # whether a table has a column (for the migration of older databases)
     cur.execute(f"PRAGMA table_info({table})")
@@ -62,6 +68,11 @@ def initialize_schema():
 
     cur.execute(queries.CREATE_TABLE_RATINGS)
     cur.execute(queries.CREATE_TABLE_SEEN)
+
+    # older dbs store app ratings as 1 to 10 integers: converted to stars
+    if _column_type(cur, 'ratings', 'rating') == 'INT':
+        for query in queries.MIGRATE_RATINGS_TO_STARS:
+            cur.execute(query)
 
     # user_reviews is static, so review_count/avg_rating are calculated once
     # here rather than aggregated on every recommendation request
@@ -176,7 +187,7 @@ def insert_seen(username, albums):
 
 
 def insert_rating(username, album_id, rating):
-    # saves a rating given in the app (1 to 10)
+    # saves a rating given in the app, in stars (0.5 to 5)
     # TODO: allow the user to update an existing rating
     # (today ON CONFLICT DO NOTHING silently ignores the new rating)
     created_at = datetime.now()

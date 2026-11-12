@@ -41,14 +41,14 @@ def copy_database(source=SOURCE_DB, target=WORK_DB, attempts=30):
 
 
 def read_reviews(database=WORK_DB):
-    # Reviews with a rating: RYM's (0.5 to 5 stars) plus this app's own ratings,
-    # which use a 1-10 scale and are halved to match (when a user rated an album
-    # in both places, the app rating wins). Sorted chronologically per user; same
+    # Reviews with a rating: RYM's plus this app's own ratings, both in stars
+    # (0.5 to 5 in steps of 0.5); when a user rated an album in both places,
+    # the app rating wins. Sorted chronologically per user; same
     # day ties are broken by insertion order, and app ratings go after RYM's.
     with sqlite3.connect(database) as conn:
         rym = pd.read_sql('SELECT username, album_id, rating, review_date AS date, id AS ord '
                           'FROM user_reviews WHERE COALESCE(rating, 0) > 0', conn)
-        app = pd.read_sql('SELECT username, album_id, rating / 2.0 AS rating, created_at AS date, rowid AS ord '
+        app = pd.read_sql('SELECT username, album_id, rating, created_at AS date, rowid AS ord '
                           'FROM ratings WHERE COALESCE(rating, 0) > 0', conn)
     app['ord'] += rym['ord'].max() + 1 if len(rym) else 0
     rym = rym.merge(app[['username', 'album_id']], how='left', indicator=True)

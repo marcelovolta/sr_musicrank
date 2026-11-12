@@ -20,10 +20,20 @@ CREATE_TABLE_RATINGS = """
         username TEXT,
         album_id INTEGER,
         created_at TEXT,
-        rating INT,
+        rating REAL,  -- stars, 0.5 to 5 in steps of 0.5 (like user_reviews)
         PRIMARY KEY (username, album_id)
     )
 """
+
+# ratings used to store 1 to 10 in an INT column: it's rebuilt with a REAL
+# column and the old values halved, so they become stars like user_reviews
+MIGRATE_RATINGS_TO_STARS = [
+    "ALTER TABLE ratings RENAME TO ratings_old",
+    CREATE_TABLE_RATINGS,
+    """INSERT INTO ratings (username, album_id, created_at, rating)
+       SELECT username, album_id, created_at, rating / 2.0 FROM ratings_old""",
+    "DROP TABLE ratings_old",
+]
 
 CREATE_TABLE_SEEN = """
     CREATE TABLE IF NOT EXISTS seen (
