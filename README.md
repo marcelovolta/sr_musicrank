@@ -34,8 +34,15 @@ python pipeline.py --resume             # picks up interrupted Optuna studies
 flask --app app run                     # the app
 ```
 
-Dependencies (Python 3.13): Flask, NumPy, pandas, SciPy, scikit-surprise, Keras with JAX,
-Optuna, LightGBM and matplotlib.
+Dependencies (Python 3.13):
+
+```bash
+pip install -r requirements.txt         # the web app: Flask, NumPy, pandas, SciPy, LightGBM
+pip install -r requirements-train.txt   # also training: scikit-surprise, Keras with JAX, Optuna, matplotlib
+```
+
+The web app runs without the training packages; they're only needed for `pipeline.py` and the
+"retrain model" button.
 
 ## Data
 
