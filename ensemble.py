@@ -4,7 +4,6 @@ import sqlite3
 import time
 
 import numpy as np
-import optuna
 import pandas as pd
 
 import dataset
@@ -175,6 +174,7 @@ def _bases(df, database):
 def optimize_and_train(train, validation, rest, test, database, trials=TRIALS):
     # stages A and B (see above), Optuna over LightGBM, final model and report.
     # rest = train + validation
+    import optuna  # only for training: the app runs without it
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     start = time.time()
     table = album_table(database)

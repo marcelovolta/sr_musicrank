@@ -3,7 +3,6 @@ import os
 import time
 
 import numpy as np
-import optuna
 
 import dataset
 import models
@@ -85,6 +84,7 @@ def optimize(name, train, validation, database, trials=None, resume=False):
     # Searches the hyperparameters with Optuna (TPE): trains on train and
     # measures on validation. The study is kept in data/work/optuna.db, so with
     # resume=True an interrupted one is picked up again
+    import optuna  # only for training: the app runs without it
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     if not resume:
         try:
@@ -118,6 +118,7 @@ def optimize(name, train, validation, database, trials=None, resume=False):
 
 def best_params(name, study):
     # the hyperparameters of the best trial, complete (as suggest builds them)
+    import optuna  # only for training: the app runs without it
     return models.suggest(name, optuna.trial.FixedTrial(study.best_params))
 
 
@@ -220,6 +221,7 @@ def fmt(v):
 
 def report_model(name, study, m, curve_points=None):
     # reports/<model>.md: best hyperparameters, importance and best trials
+    import optuna  # only for training: the app runs without it
     o = m['optimization']
     ev = o['evaluation']
     lines = [
